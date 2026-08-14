@@ -1,6 +1,10 @@
 from gemini_client import GeminiClient, ChatSession
+from rich.console import Console
+from rich.markdown import Markdown
 
 SESSION_ID = 'terminal'
+
+console = Console()
 
 def main():
     client = GeminiClient()
@@ -40,6 +44,7 @@ def main():
                 continue
 
             if user_input == "/exit":
+                print("See You Space Cowboy...")
                 break
 
             if user_input == "/help":
@@ -62,7 +67,7 @@ def main():
             response = chat.send(user_input)
 
             print("\nGemini >")
-            print(response.text)
+            console.print(Markdown(response.text))
 
         except KeyboardInterrupt:
             print("\nEncerrando...")
@@ -88,6 +93,7 @@ def print_history(chat: ChatSession) -> None:
 
         print(f"\n{role}:")
         print(message.text)
+        console.print(Markdown(message.text))
 
 if __name__ == "__main__":
     main()
