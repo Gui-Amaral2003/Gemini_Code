@@ -321,7 +321,7 @@ Este projeto está em desenvolvimento ativo. Contribuições são bem-vindas!
 
 ## 📄 Licença
 
-[Escolha sua licença - ex: MIT]
+Este projeto está licenciado sob a [MIT License](LICENSE) - veja o arquivo [LICENSE](LICENSE) para detalhes completos.
 
 ## ⚙️ Configuração Avançada
 
