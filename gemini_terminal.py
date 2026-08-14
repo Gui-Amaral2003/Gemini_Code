@@ -88,3 +88,6 @@ def print_history(chat: ChatSession) -> None:
 
         print(f"\n{role}:")
         print(message.text)
+
+if __name__ == "__main__":
+    main()
