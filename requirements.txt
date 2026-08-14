@@ -1,0 +1,19 @@
+# Gemini Client - Dependências
+
+# Google Gemini API
+google-genai>=0.4.0
+
+# Interface de terminal com formatação
+rich>=13.0.0
+
+# Carregamento de variáveis de ambiente
+python-dotenv>=1.0.0
+
+# Acesso a banco de dados
+sqlalchemy>=2.0.0
+
+# Parsing de YAML para definição de processos
+pyyaml>=6.0
+
+# Driver SQL Server (opcional, necessário se usar query_table)
+pyodbc>=5.0.0
