@@ -1,4 +1,4 @@
-from gemini_client import GeminiClient, ChatSession
+from old_gemini_client import GeminiClient, ChatSession
 
 
 def main():

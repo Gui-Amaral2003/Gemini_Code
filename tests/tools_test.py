@@ -1,4 +1,4 @@
-from gemini_client import GeminiClient
+from old_gemini_client import GeminiClient
 
 
 client = GeminiClient()

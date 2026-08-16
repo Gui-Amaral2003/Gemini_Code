@@ -1,23 +1,26 @@
 # Gemini Client
 
-Um cliente Python robusto e reutilizável para a [Google Gemini API](https://ai.google.dev/) com suporte a conversas persistentes, ferramentas customizáveis, retry automático e logging estruturado.
+Cliente Python para a [Google Gemini API](https://ai.google.dev/) com suporte a conversas persistentes, ferramentas customizáveis, retry automático, cache e terminal interativo.
+
+A biblioteca foi reorganizada em um pacote Python dedicado em `gemini/`, mantendo compatibilidade via o wrapper no arquivo raiz `gemini_client.py`.
 
 > ⚠️ **Em Desenvolvimento**: Este projeto ainda está em fase inicial. Novas ferramentas e funcionalidades serão adicionadas frequentemente.
 
 ## 🎯 Características
 
-- **Cliente Gemini Wrapper**: Interface simplificada sobre a Interactions API do Gemini com tratamento robusto de erros
-- **Conversas Persistentes**: Mantém histórico de conversas localmente e recupera sessões anteriores
-- **Ferramentas Customizáveis**: Execute funções Python através do Gemini (leitura de arquivos, consultas em banco de dados, etc.)
-- **Retry Automático**: Recuperação automática de falhas transitórias com backoff exponencial
-- **Cache Inteligente**: Evita chamadas duplicadas ao Gemini
-- **Logging Estruturado**: Rastreamento de uso de tokens em arquivo JSON Lines
-- **Terminal Interativo**: CLI amigável para conversas via terminal
+- **Pacote principal em `gemini/`**: organização modular para cliente, sessão, modelos e configurações
+- **Cliente Gemini Wrapper**: interface simples sobre a API do Google Gemini com tratamento robusto de erros
+- **Conversas persistentes**: histórico local e recuperação de sessões anteriores
+- **Ferramentas customizáveis**: execução de funções Python a partir do modelo
+- **Retry automático**: recuperação de falhas transitórias com backoff exponencial
+- **Cache inteligente**: evita chamadas duplicadas e reduz custo de tokens
+- **Logging estruturado**: monitoramento de uso com arquivo JSONL
+- **Terminal interativo**: CLI de demonstração e uso prático
 
 ## 📋 Requisitos
 
 - Python 3.8+
-- Chave de API do Google Gemini (obtenha em [ai.google.dev](https://ai.google.dev/))
+- Chave de API do Google Gemini: [ai.google.dev](https://ai.google.dev/)
 
 ## 🚀 Instalação
 
@@ -56,100 +59,103 @@ GEMINI_API_KEY=sua_chave_aqui
 DB_CONN_STRING=sua_connection_string_opcional
 ```
 
-## 💡 Exemplos de Uso
+## 💡 Importando o pacote
+
+A importação recomendada agora é via o pacote `gemini`:
+
+```python
+from gemini import GeminiClient, ChatSession, load_processes, run_process
+```
+
+O arquivo raiz `gemini_client.py` continua funcionando como compatibilidade para imports antigos, mas a organização oficial do projeto passou a ficar em `gemini/`.
+
+## 🧪 Exemplos de Uso
 
 ### Uso Básico
 
 ```python
-from gemini_client import GeminiClient
+from gemini import GeminiClient
 
 client = GeminiClient()
 
-# Geração simples
 response = client.generate("Explique o que é uma CTE em SQL")
 print(response.text)
 print(f"Tokens usados: {response.total_tokens}")
 ```
 
-### Conversa com Histórico
+### Conversa com histórico
 
 ```python
-from gemini_client import GeminiClient, ChatSession
+from gemini import GeminiClient, ChatSession
 
 client = GeminiClient()
 
-# Cria uma sessão nomeada (persistida em disco)
 chat = ChatSession(
     client=client,
     session_id="meu_tutor_sql",
     system_instruction="Você é um tutor de SQL experiente."
 )
 
-# Envia mensagens (histórico é mantido pelo servidor)
 r1 = chat.send("O que é uma CTE?")
 print(r1.text)
 
 r2 = chat.send("Me dá um exemplo com JOIN.")
 print(r2.text)
 
-# Ver histórico local
 for msg in chat.get_history():
     print(f"{msg.role}: {msg.text}\n")
 ```
 
-### Terminal Interativo
+### Terminal interativo
 
 ```bash
 python gemini_terminal.py
 ```
 
 Comandos disponíveis:
-- `/help` - Mostra ajuda
-- `/history` - Mostra histórico da sessão
-- `/clear` - Limpa o contexto
-- `/tokens` - Mostra consumo de tokens
-- `/exit` - Sair
+- `/help` - mostra ajuda
+- `/history` - mostra histórico da sessão
+- `/clear` - limpa o contexto
+- `/tokens` - mostra consumo de tokens
+- `/exit` - sai do terminal
 
-### Usando Ferramentas
+### Usando ferramentas
 
 O Gemini pode executar ferramentas Python automaticamente:
 
 ```python
-from gemini_client import GeminiClient
+from gemini import GeminiClient
 
 client = GeminiClient()
 
-# Pede ao Gemini que leia um arquivo
 response = client.generate(
     "Leia o arquivo config.yaml e resuma seu conteúdo"
 )
-print(response.text)  # Gemini executa read_file() automaticamente
+print(response.text)
 ```
 
-### Registrando Processos Reutilizáveis
+### Registrando processos reutilizáveis
 
 ```python
-from gemini_client import GeminiClient, register_process, run_process
+from gemini import GeminiClient, register_process, run_process
 
 client = GeminiClient()
 
-# Registra um processo nomeado
 register_process(
     "triagem_logs",
     system="""Você é um assistente de triagem de logs.
-              Responda em 3 seções: 
+              Responda em 3 seções:
               1. Causa provável
               2. Tipo de erro (transitório/estrutural)
               3. Sugestão de correção"""
 )
 
-# Usa o processo em qualquer lugar
 log = "[ERROR] Connection timeout..."
 response = run_process(client, "triagem_logs", log)
 print(response.text)
 ```
 
-### Carregando Processos de Arquivo
+### Carregando processos de arquivo
 
 **process.yaml:**
 ```yaml
@@ -165,7 +171,7 @@ summarize_pt:
 
 **Código:**
 ```python
-from gemini_client import GeminiClient, load_processes, run_process
+from gemini import GeminiClient, load_processes, run_process
 
 client = GeminiClient()
 load_processes("process.yaml")
@@ -176,16 +182,35 @@ print(response.text)
 
 ## 📁 Estrutura do Projeto
 
-```
-gemini/
-├── gemini_client.py           # Cliente principal do Gemini
-├── gemini_terminal.py         # CLI interativa
-├── tools.py                   # Ferramentas customizáveis
-├── process.yaml               # Definição de processos reutilizáveis
-├── gemini_cache.json          # Cache de respostas (auto-gerado)
-├── gemini_usage_log.jsonl     # Log de uso de tokens (auto-gerado)
-├── chat_sessions.json         # Sessões persistidas (auto-gerado)
-└── README.md                  # Este arquivo
+```text
+.
+├── gemini/
+│   ├── __init__.py             # Exporta os símbolos públicos do pacote
+│   ├── client.py               # Cliente principal do Gemini
+│   ├── session.py              # Sessões e histórico de conversa
+│   ├── models.py               # Modelos de resposta e mensagens
+│   ├── config.py               # Configurações e caminhos padrão
+│   ├── cache.py                # Cache de prompts e respostas
+│   ├── retry.py                # Lógica de retry
+│   └── ...
+├── tools/
+│   ├── __init__.py
+│   ├── definitions.py
+│   ├── filesystem.py
+│   ├── database.py
+│   ├── spreadsheet.py
+│   ├── registry.py
+│   └── tools.py
+├── gemini_client.py            # Compatibilidade para imports antigos
+├── gemini_terminal.py          # CLI interativa
+├── process.yaml                # Definição de processos reutilizáveis
+├── requirements.txt
+├── README.md
+├── LICENSE
+├── TODO.md
+├── examples/
+├── tests/
+└── ...
 ```
 
 ## 🛠️ Ferramentas Disponíveis
@@ -195,7 +220,6 @@ gemini/
 Lê o conteúdo de um arquivo de texto.
 
 ```python
-# O Gemini pode chamar isto automaticamente
 response = client.generate("Qual é o tamanho do arquivo config.yaml?")
 ```
 
@@ -204,7 +228,7 @@ response = client.generate("Qual é o tamanho do arquivo config.yaml?")
 
 ### 2. `query_table`
 
-Executa consultas SELECT em tabelas pré-cadastradas do banco de dados (apenas SQL Server por enquanto).
+Executa consultas SELECT em tabelas pré-cadastradas do banco de dados (atualmente com foco em SQL Server).
 
 **Tabelas suportadas:**
 - `TEST_DOA_DEALS` (schema `rsk`)
@@ -227,7 +251,7 @@ print(result)
 
 ## 🔄 Fluxo de Execução com Ferramentas
 
-```
+```text
 ┌─────────────────┐
 │ Prompt do User  │
 └────────┬────────┘
@@ -239,7 +263,7 @@ print(result)
          │
          ▼
 ┌──────────────────────────────┐
-│ Gemini API (Interactions)    │
+│ Gemini API                   │
 └────────┬─────────────────────┘
          │
     ┌────┴────┐
@@ -273,6 +297,8 @@ print(result)
 ### Verificar uso de tokens
 
 ```python
+from gemini import GeminiClient
+
 client = GeminiClient()
 response = client.generate("Seu prompt aqui")
 
@@ -280,7 +306,6 @@ print(f"Input tokens: {response.input_tokens}")
 print(f"Output tokens: {response.output_tokens}")
 print(f"Total: {response.total_tokens}")
 
-# Resumo da sessão
 summary = client.session_summary()
 print(summary)
 # {
@@ -291,33 +316,23 @@ print(summary)
 # }
 ```
 
-### Analisar log de uso
-
-```python
-from gemini_client import read_usage_log
-
-logs = read_usage_log("gemini_usage_log.jsonl")
-for entry in logs[-5:]:  # Últimas 5 chamadas
-    print(f"{entry['timestamp']}: {entry['process']} - {entry['total_tokens']} tokens")
-```
-
 ## 🤝 Contribuindo
 
 Este projeto está em desenvolvimento ativo. Contribuições são bem-vindas!
 
-- 🐛 Reporte bugs abrindo uma issue
-- 🚀 Sugira novas ferramentas (tools)
-- 📝 Melhore a documentação
-- 💡 Proponha novas funcionalidades
+- 🐛 reporte bugs abrindo uma issue
+- 🚀 sugira novas ferramentas
+- 📝 melhore a documentação
+- 💡 proponha novas funcionalidades
 
 ## 📝 Roadmap
 
-- [ ] Novas ferramentas de análise de dados
-- [ ] Suporte a outros bancos de dados (PostgreSQL, MySQL, etc.)
-- [ ] Integração com armazenamento em nuvem (S3, GCS)
-- [ ] Web UI para gerenciar sessões
-- [ ] Suporte a embeddings e RAG
-- [ ] Validação de schema para consultas SQL mais robusta
+- [ ] novas ferramentas de análise de dados
+- [ ] suporte a outros bancos de dados
+- [ ] integração com armazenamento em nuvem
+- [ ] web UI para gerenciar sessões
+- [ ] suporte a embeddings e RAG
+- [ ] validação de schema para consultas SQL mais robusta
 
 ## 📄 Licença
 
@@ -328,12 +343,14 @@ Este projeto está licenciado sob a [MIT License](LICENSE) - veja o arquivo [LIC
 ### Personalizar comportamento do cliente
 
 ```python
+from gemini import GeminiClient
+
 client = GeminiClient(
-    api_key="sua_chave",                  # API key do Gemini
-    default_model="gemini-3.5-flash",     # Modelo padrão
-    max_retries=3,                        # Tentativas em falhas transitórias
-    use_cache=True,                       # Usar cache de respostas
-    fallback_models=[                     # Modelos de fallback em rate limit
+    api_key="sua_chave",
+    default_model="gemini-3.5-flash",
+    max_retries=3,
+    use_cache=True,
+    fallback_models=[
         "gemini-3.6-flash",
         "gemini-3.5-flash-lite"
     ]
@@ -352,16 +369,14 @@ response = client.generate(
 ### Controlar temperatura (criatividade)
 
 ```python
-# Mais previsível (0.0 a 1.0, padrão 0.7)
 response = client.generate(
     "Qual é 2+2?",
-    temperature=0.0  # Sempre mesma resposta
+    temperature=0.0
 )
 
-# Mais criativo
 response = client.generate(
     "Escreva uma piada sobre Python",
-    temperature=1.0  # Respostas variadas
+    temperature=1.0
 )
 ```
 
