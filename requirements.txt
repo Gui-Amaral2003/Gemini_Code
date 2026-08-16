@@ -17,3 +17,9 @@ pyyaml>=6.0
 
 # Driver SQL Server (opcional, necessário se usar query_table)
 pyodbc>=5.0.0
+
+# Manipulação e análise de dados
+pandas>=2.0.0
+
+# Leitura de arquivos Excel
+openpyxl>=3.0.0
