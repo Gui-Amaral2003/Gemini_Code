@@ -83,6 +83,7 @@ class GeminiResponse:
     model: str
     process_name: Optional[str] = None
     interaction_id: Optional[str] = None
+    api_calls: int = 1
     raw: object = field(default=None, repr=False)
 
 @dataclass
@@ -423,6 +424,13 @@ class GeminiClient:
         no __init__); True/False força ligar ou ignorar o cache só nesta
         chamada — útil quando você quer forçar uma resposta nova mesmo tendo
         cache (ex: temperature alta, respostas variadas de propósito).
+
+        Observação sobre contagem de tokens: quando o Gemini usa ferramentas
+        (tool calling), cada rodada de function_call é uma chamada separada
+        à API, cada uma com seu próprio custo de tokens. Este método soma o
+        uso de TODAS as chamadas feitas dentro desta invocação de generate()
+        (não só a última, que gera o texto final) — veja `api_calls` na
+        resposta para saber quantas chamadas reais isso representou.
         """
         if not prompt or not prompt.strip():
             raise ValueError("O prompt não pode ser vazio.")
@@ -455,6 +463,7 @@ class GeminiClient:
                     model=cached.get("model", model),
                     interaction_id=cached.get("interaction_id"),
                     process_name=process_name,
+                    api_calls=0,  # veio do cache: nenhuma chamada real foi feita
                     raw=None,
                 )
                 self._log_usage(response, cached=True)
@@ -470,6 +479,20 @@ class GeminiClient:
         while True:
             attempt += 1
             try:
+                accumulated_input_tokens = 0
+                accumulated_output_tokens = 0
+                accumulated_total_tokens = 0
+                api_calls_made = 0
+
+                def _accumulate_usage(interaction) -> None:
+                    nonlocal accumulated_input_tokens, accumulated_output_tokens
+                    nonlocal accumulated_total_tokens, api_calls_made
+                    usage = getattr(interaction, "usage", None)
+                    accumulated_input_tokens += getattr(usage, "total_input_tokens", 0) or 0
+                    accumulated_output_tokens += getattr(usage, "total_output_tokens", 0) or 0
+                    accumulated_total_tokens += getattr(usage, "total_tokens", 0) or 0
+                    api_calls_made += 1
+
                 interaction, current_model = self._create_with_fallback(
                     input=prompt,
                     tools=TOOL_DEFINITIONS,
@@ -478,6 +501,7 @@ class GeminiClient:
                     system_instruction=system,
                     generation_config=generation_config or None,
                 )
+                _accumulate_usage(interaction)
 
                 while True:
                     function_calls = self._get_function_calls(interaction)
@@ -521,11 +545,16 @@ class GeminiClient:
                         preferred_model=current_model,
                         system_instruction=system,
                     )
+                    _accumulate_usage(interaction)
 
                 response = self._to_response(
                     interaction,
                     current_model,
                     process_name,
+                    input_tokens=accumulated_input_tokens,
+                    output_tokens=accumulated_output_tokens,
+                    total_tokens=accumulated_total_tokens,
+                    api_calls=api_calls_made,
                 )
 
                 self._log_usage(response)
@@ -568,27 +597,18 @@ class GeminiClient:
         interaction,
         model: str,
         process_name: Optional[str],
+        *,
+        input_tokens: int,
+        output_tokens: int,
+        total_tokens: int,
+        api_calls: int = 1,
     ) -> GeminiResponse:
-
-        usage = interaction.usage
 
         return GeminiResponse(
             text=interaction.output_text,
-            input_tokens=getattr(
-                usage,
-                "total_input_tokens",
-                0,
-            ),
-            output_tokens=getattr(
-                usage,
-                "total_output_tokens",
-                0,
-            ),
-            total_tokens=getattr(
-                usage,
-                "total_tokens",
-                0,
-            ),
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            total_tokens=total_tokens,
             model=model,
             interaction_id=getattr(
                 interaction,
@@ -596,6 +616,7 @@ class GeminiClient:
                 None,
             ),
             process_name=process_name,
+            api_calls=api_calls,
             raw=interaction,
         )
 
@@ -605,7 +626,7 @@ class GeminiClient:
     def _log_usage(self, response: GeminiResponse, cached: bool = False) -> None:
         self._session_input_tokens += response.input_tokens
         self._session_output_tokens += response.output_tokens
-        self._session_calls += 1
+        self._session_calls += response.api_calls
 
         entry = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -614,6 +635,7 @@ class GeminiClient:
             "input_tokens": response.input_tokens,
             "output_tokens": response.output_tokens,
             "total_tokens": response.total_tokens,
+            "api_calls": response.api_calls,
             "cached": cached,
         }
         try:
