@@ -1,5 +1,10 @@
-import re
 import os
+
+from .validation import (
+    QueryValidationError,
+    _validate_identifier,
+    validate_conditions
+)
 
 TABELAS_PERMITIDAS = {
     "TEST_DOA_DEALS": {
@@ -19,44 +24,9 @@ TABELAS_PERMITIDAS = {
     }
 }
 
-
-_OPERADORES_POR_TIPO = {
-    "int": {"=", "!=", ">", "<", ">=", "<="},
-    "float": {"=", "!=", ">", "<", ">=", "<="},
-    "date": {"=", "!=", ">", "<", ">=", "<="},
-    "str": {"=", "!=", "LIKE"}
-}
-
-# Validação extra de indentificadores válidos
-_IDENTIFIER_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
-
-MAX_ROWS = 10_000
+MAX_ROWS = 5000
 QUERY_TIMEOUT_SECONDS = 10
 
-class QueryValidationError(ValueError):
-    """Erro de validação de query."""
-
-def _validate_identifier(name: str, label: str) -> None:
-    if not _IDENTIFIER_RE.match(name):
-        raise QueryValidationError(f"{label} inválido: {name!r}")
-
-def _coerce_value(value, tipo: str, coluna: str):
-    """Converte o valor para o tipo esperado"""
-    try:
-        if tipo == 'int':
-            return int(value)
-        if tipo == 'float':
-            return float(value)
-        if tipo == 'date':
-            # Aceita YYYY-MM-DD, deixa o driver validar o formato final
-            if not re.match(r"^\d{4}-\d{2}-\d{2}$", str(value)):
-                raise ValueError
-            return str(value)
-        if tipo == 'str':
-            return str(value)
-
-    except (ValueError, TypeError) as e:
-        raise QueryValidationError(f"Erro ao converter valor para coluna {coluna}: {value}. Detalhes: {e}")
 
 def _build_query(table: str, conditions: list[dict]):
     """
@@ -83,35 +53,7 @@ def _build_query(table: str, conditions: list[dict]):
     where_clauses = []
     params = []
 
-    for cond in conditions or []:
-        coluna = cond.get('column')
-        operador = cond.get('operator')
-        valor = cond.get('value')
-
-        if coluna not in colunas_filtro:
-            raise QueryValidationError(
-                f"Coluna não permitida para filtro: {coluna}. "
-                f"Disponíveis: {list(colunas_filtro)}"
-            )
-
-        _validate_identifier(coluna, 'coluna de filtro')
-
-        tipo = colunas_filtro[coluna]
-        operadores_validos = _OPERADORES_POR_TIPO[tipo]
-
-        if operador not in operadores_validos:
-            raise QueryValidationError(
-                f"Operador '{operador}' não é permitido para a coluna '{coluna}' "
-                f"(tipo {tipo}). Permitidos: {sorted(operadores_validos)}"
-            )
-
-        valor_validado = _coerce_value(valor, tipo, coluna)
-
-        if operador == "LIKE":
-            # o próprio valor pode ter % embutido; se não tiver, envolve automaticamente
-            if "%" not in valor_validado:
-                valor_validado = f"%{valor_validado}%"
-
+    for coluna, operador, valor_validado in validate_conditions(conditions, colunas_filtro):
         where_clauses.append(f"[{coluna}] {operador} :param_{len(params)}")
         params.append(valor_validado)
 
@@ -157,3 +99,4 @@ def query_table(table: str, conditions: list[dict] | None = None) -> str:
             return str(result_list)
     except Exception as e:
         return f"Erro ao executar a query: {e}"
+
