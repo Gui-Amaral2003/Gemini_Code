@@ -12,6 +12,7 @@ A biblioteca foi reorganizada em um pacote Python dedicado em `gemini/`, mantend
 - **Cliente Gemini Wrapper**: interface simples sobre a API do Google Gemini com tratamento robusto de erros
 - **Conversas persistentes**: histórico local e recuperação de sessões anteriores
 - **Ferramentas customizáveis**: execução de funções Python a partir do modelo
+- **Análise de dados integrada**: sumarização, filtros e agregações em planilhas e tabelas pré-cadastradas
 - **Retry automático**: recuperação de falhas transitórias com backoff exponencial
 - **Cache inteligente**: evita chamadas duplicadas e reduz custo de tokens
 - **Logging estruturado**: monitoramento de uso com arquivo JSONL
@@ -40,7 +41,7 @@ pip install -r requirements.txt
 Ou manualmente:
 
 ```bash
-pip install google-genai rich python-dotenv sqlalchemy
+pip install google-genai rich python-dotenv sqlalchemy pandas openpyxl tabulate pyyaml pyodbc
 ```
 
 ### 3. Configure a API Key
@@ -199,6 +200,7 @@ print(response.text)
 │   ├── filesystem.py
 │   ├── database.py
 │   ├── spreadsheet.py
+│   ├── data_analysis.py        # Agregação e análise de dados em CSV/XLSX e tabelas
 │   ├── registry.py
 │   └── tools.py
 ├── gemini_client.py            # Compatibilidade para imports antigos
@@ -245,6 +247,39 @@ result = query_table(
     ]
 )
 print(result)
+```
+
+### 3. `analyze_sheet_data`
+
+Carrega um CSV ou Excel e aplica agregações, filtros e agrupamentos em uma única chamada.
+
+**Operações suportadas:** `sum`, `mean`, `count`, `min`, `max`, `nunique`, `median`, `std`
+
+```python
+from tools.data_analysis import analyze_sheet_data
+
+print(analyze_sheet_data(
+    file_path="examples/SampleSuperstore.csv",
+    operation="sum",
+    target_column="Sales",
+    group_by="Segment",
+    top_n=3,
+))
+```
+
+### 4. `analyze_table_data`
+
+Executa a mesma lógica sobre uma tabela permitida do banco de dados, aplicando filtros em memória após o carregamento.
+
+```python
+from tools.data_analysis import analyze_table_data
+
+print(analyze_table_data(
+    table="TEST_DOA_DEALS",
+    operation="count",
+    group_by="Company",
+    top_n=10,
+))
 ```
 
 ---
@@ -327,7 +362,7 @@ Este projeto está em desenvolvimento ativo. Contribuições são bem-vindas!
 
 ## 📝 Roadmap
 
-- [ ] novas ferramentas de análise de dados
+- [x] ferramentas de análise de dados
 - [ ] suporte a outros bancos de dados
 - [ ] integração com armazenamento em nuvem
 - [ ] web UI para gerenciar sessões

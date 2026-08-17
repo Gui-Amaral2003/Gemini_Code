@@ -1,8 +1,12 @@
-from gemini_client import GeminiClient, ChatSession
+##TODO: 1. Testar tools de excel para planilhas grandes, verificar se o modelo vai chamar a read_sheet e não a preview_sheet 
+##TODO: 2. Usar para um caso generico, com o objetivo de testar a search_in_sheet
+##TODO: 3. Solicitar dados que não existe, para garantir que o modelo não vai invertar dados
+##TODO: 4. Adicionar uma busca por arqruivos mais robusta
+from gemini import GeminiClient, ChatSession
 from rich.console import Console
 from rich.markdown import Markdown
 
-SESSION_ID = 'terminal'
+SESSION_ID = 'teste'
 
 console = Console()
 
@@ -15,11 +19,21 @@ def main():
         system_instruction = """
         Você é meu assistente técnico de programação.
         O usuário trabalha principalmente com dois ambientes:
-        -LOCAL WINDOWS: Python, SQL Server
-        -VM LINUX: Python, SQL, PySpark, Airflow, Hive
 
         Responda de forma ojetiva e técnica. 
         Mantenha o contexto da conversa
+
+        REGRA OBRIGATÓRIA sobre cálculos em dados de planilha ou banco:
+        Se a pergunta pedir soma, média, contagem, mínimo, máximo, ou total agrupado por
+        categoria/região/vendedor/etc., você DEVE chamar a ferramenta analyze_sheet_data
+        (planilhas) ou analyze_table_data (banco) e responder com o RESULTADO que ela retornar.
+
+        Isso significa que, para esse tipo de pergunta:
+        - É proibido calcular o resultado você mesmo a partir de dados lidos via read_sheet,
+        preview_sheet ou query_table.
+        - read_sheet/preview_sheet/query_table só servem para exibir linhas/registros ao usuário
+        ou para descobrir nomes de colunas — nunca como substituto de analyze_sheet_data/
+        analyze_table_data para produzir um resultado agregado.
         """
     )
 

@@ -6,6 +6,8 @@ from .spreadsheet import (
     search_in_sheet,
 )
 from .database import query_table
+from .data_analysis import analyze_sheet_data, analyze_table_data
+
 
 # Funções que o Python realmente pode executar.
 TOOLS = {
@@ -14,5 +16,7 @@ TOOLS = {
     'list_sheets': list_sheets,
     'preview_sheet': preview_sheet,
     'read_sheet': read_sheet,
-    'search_in_sheet': search_in_sheet
+    'search_in_sheet': search_in_sheet,
+    'analyze_sheet_data': analyze_sheet_data,
+    'analyze_table_data': analyze_table_data
 }

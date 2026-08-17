@@ -185,5 +185,144 @@ TOOL_DEFINITIONS = [
             "required": ["path", "query"],
         },
     },
+    {
+        "type": "function",
+        "name": "analyze_sheet_data",
+        "description": (
+            "Executa uma análise agregada (soma, média, contagem, min, max, etc.) sobre os "
+            "dados de uma planilha (.xlsx ou .csv), com filtro e agrupamento opcionais. "
+            "Use esta ferramenta em vez de calcular manualmente a partir de dados já vistos "
+            "no contexto — ela garante exatidão e evita ler a planilha inteira."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Caminho do arquivo de planilha (.xlsx ou .csv).",
+                },
+                "sheet_name": {
+                    "type": "string",
+                    "description": "Nome da aba, se aplicável (apenas para .xlsx). Se omitido, usa a primeira aba.",
+                },
+                "operation": {
+                    "type": "string",
+                    "enum": ["sum", "mean", "count", "min", "max", "nunique", "median", "std"],
+                    "description": "Operação de agregação a ser aplicada.",
+                },
+                "target_column": {
+                    "type": "string",
+                    "description": (
+                        "Coluna a ser agregada. Obrigatória para todas as operações, exceto "
+                        "'count' sem agrupamento (nesse caso, conta o total de linhas)."
+                    ),
+                },
+                "group_by": {
+                    "type": "string",
+                    "description": (
+                        "Coluna única para agrupar o resultado. Se omitido, retorna um único "
+                        "valor agregado sobre toda a planilha."
+                    ),
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Lista de condições de filtro aplicadas antes da agregação.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação. LIKE apenas para colunas de texto.",
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Valor de comparação (convertido para o tipo real da coluna).",
+                            },
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Limita o número de grupos retornados quando group_by é usado.",
+                },
+                "sort_ascending": {
+                    "type": "boolean",
+                    "description": "Se True, ordena o resultado agrupado em ordem crescente. Padrão: decrescente.",
+                },
+            },
+            "required": ["file_path", "operation"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "analyze_table_data",
+        "description": (
+            "Executa uma análise agregada (soma, média, contagem, min, max, etc.) sobre os "
+            "dados de uma tabela pré-cadastrada do banco SQL Server, com filtro e agrupamento "
+            "opcionais. Use esta ferramenta em vez de calcular manualmente a partir de dados já "
+            "vistos no contexto — ela garante exatidão e evita ler a tabela inteira."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "description": "Nome da tabela pré-cadastrada (ver TABELAS_PERMITIDAS).",
+                },
+                "operation": {
+                    "type": "string",
+                    "enum": ["sum", "mean", "count", "min", "max", "nunique", "median", "std"],
+                    "description": "Operação de agregação a ser aplicada.",
+                },
+                "target_column": {
+                    "type": "string",
+                    "description": (
+                        "Coluna a ser agregada. Obrigatória para todas as operações, exceto "
+                        "'count' sem agrupamento (nesse caso, conta o total de linhas)."
+                    ),
+                },
+                "group_by": {
+                    "type": "string",
+                    "description": (
+                        "Coluna única para agrupar o resultado. Se omitido, retorna um único "
+                        "valor agregado sobre toda a tabela."
+                    ),
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Lista de condições de filtro aplicadas antes da agregação.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação. LIKE apenas para colunas de texto.",
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Valor de comparação (convertido para o tipo real da coluna).",
+                            },
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Limita o número de grupos retornados quando group_by é usado.",
+                },
+                "sort_ascending": {
+                    "type": "boolean",
+                    "description": "Se True, ordena o resultado agrupado em ordem crescente. Padrão: decrescente.",
+                },
+            },
+            "required": ["table", "operation"],
+        },
+    },
 ]
+ 
  
