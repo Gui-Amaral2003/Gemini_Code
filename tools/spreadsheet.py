@@ -2,25 +2,12 @@ from pathlib import Path
 import pandas as pd
 from openpyxl import load_workbook
 from typing import Optional
+from .filesystem import resolve_file_path
 
 SPREADSHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
 
 def _validate_spreadsheet_path(path: str) -> tuple[Optional[Path], Optional[str]]:
-    """Validações comuns antes de tentar abrir a planilha. Retorna (Path, error_message)"""
-    file_path = Path(path)
-
-    if not file_path.exists():
-        return None, f"Arquivo não encontrado: {path}"
-
-    if not file_path.is_file():
-        return None, f"O caminho não é um arquivo: {path}"
-
-    if file_path.suffix.lower() not in SPREADSHEET_EXTENSIONS:
-        return None, (
-            f"Extensão não suportada: '{file_path.suffix}'. "
-            f"Extensões aceitas: {', '.join(sorted(SPREADSHEET_EXTENSIONS))}")
-
-    return file_path, None
+    return resolve_file_path(path, allowed_extensions=SPREADSHEET_EXTENSIONS)
 
 def _is_csv(file_path: Path) -> bool:
     return file_path.suffix.lower() == ".csv"

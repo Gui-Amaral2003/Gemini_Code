@@ -6,7 +6,7 @@ from .validation import (
     _validate_identifier
 )
 from .database import TABELAS_PERMITIDAS, MAX_ROWS, QUERY_TIMEOUT_SECONDS
-
+from .filesystem import resolve_file_path
 _VALID_OPERATIONS = {'sum', 'mean', 'count', 'min', 'max', 'nunique', 'median', 'std'}
 
 def _infer_column_types(df: pd.DataFrame) -> dict[str, str]:
@@ -131,6 +131,8 @@ def _analyze_data(df: pd.DataFrame, operation: str, target_column: str | None = 
 
     return f"{tabela_md}{aviso}"
 
+SPREADSHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+
 def analyze_sheet_data(
     file_path: str,
     sheet_name: str | None = None,
@@ -143,14 +145,19 @@ def analyze_sheet_data(
 ) -> str:
     """
     Carrega uma planilha (.xlsx/.csv) e executa uma análise agregada sobre ela.
+    Aceita o nome do arquivo (busca automática) ou o caminho completo.
     """
+    resolved_path, error = resolve_file_path(file_path, allowed_extensions=SPREADSHEET_EXTENSIONS)
+    if error:
+        return error
+
     try:
-        if file_path.lower().endswith(".csv"):
-            df = pd.read_csv(file_path)
+        if resolved_path.suffix.lower() == ".csv":
+            df = pd.read_csv(resolved_path)
         else:
-            df = pd.read_excel(file_path, sheet_name=sheet_name or 0)
+            df = pd.read_excel(resolved_path, sheet_name=sheet_name or 0)
     except FileNotFoundError:
-        return f"Arquivo não encontrado: {file_path}"
+        return f"Arquivo não encontrado: {resolved_path}"
     except ValueError as e:
         # ex: sheet_name inválido — o próprio pandas/openpyxl lista as abas disponíveis
         return f"Erro ao abrir a planilha: {e}"

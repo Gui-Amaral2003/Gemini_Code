@@ -11,7 +11,10 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "path": {
                     "type": "string",
-                    "description": "Caminho do arquivo que deve ser lido.",
+                    "description": (
+                        "Nome do arquivo a ser lido ou caminho completo. Se apenas "
+                        "o nome for informado, o arquivo é localizado automaticamente."
+                    ),
                 }
             },
             "required": ["path"],
@@ -199,7 +202,10 @@ TOOL_DEFINITIONS = [
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Caminho do arquivo de planilha (.xlsx ou .csv).",
+                    "description": (
+                        "Nome do arquivo de planilha (.xlsx ou .csv) ou caminho completo. "
+                        "Se apenas o nome for informado, o arquivo é localizado automaticamente."
+                    ),
                 },
                 "sheet_name": {
                     "type": "string",

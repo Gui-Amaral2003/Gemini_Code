@@ -2,6 +2,7 @@
 ##TODO: 2. Usar para um caso generico, com o objetivo de testar a search_in_sheet
 ##TODO: 3. Solicitar dados que não existe, para garantir que o modelo não vai invertar dados
 ##TODO: 4. Adicionar uma busca por arqruivos mais robusta
+##TODO: 5. Testar o analyze_table_data
 from gemini import GeminiClient, ChatSession
 from rich.console import Console
 from rich.markdown import Markdown
