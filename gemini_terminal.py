@@ -24,6 +24,12 @@ def main():
         Responda de forma ojetiva e técnica. 
         Mantenha o contexto da conversa
 
+        REGRA SOBRE MÚLTIPLOS ARQUIVOS:
+        Se o usuário pedir para processar mais de um arquivo (planilha, PDF ou tabela)
+        na mesma solicitação, chame a ferramenta correspondente uma vez para cada
+        arquivo, todas na mesma resposta — não processe um arquivo, escreva um
+        resumo parcial e espere confirmação para continuar com o próximo.
+
         REGRA OBRIGATÓRIA sobre cálculos em dados de planilha ou banco:
         Se a pergunta pedir soma, média, contagem, mínimo, máximo, ou total agrupado por
         categoria/região/vendedor/etc., você DEVE chamar a ferramenta analyze_sheet_data

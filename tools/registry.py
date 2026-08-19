@@ -7,7 +7,7 @@ from .spreadsheet import (
 )
 from .database import query_table
 from .data_analysis import analyze_sheet_data, analyze_table_data
-
+from .pdf_reader import preview_pdf, read_pdf, search_in_pdf
 
 # Funções que o Python realmente pode executar.
 TOOLS = {
@@ -18,5 +18,8 @@ TOOLS = {
     'read_sheet': read_sheet,
     'search_in_sheet': search_in_sheet,
     'analyze_sheet_data': analyze_sheet_data,
-    'analyze_table_data': analyze_table_data
+    'analyze_table_data': analyze_table_data,
+    'preview_pdf': preview_pdf,
+    'read_pdf': read_pdf,
+    'search_in_pdf': search_in_pdf,
 }

@@ -13,6 +13,7 @@ A biblioteca foi reorganizada em um pacote Python dedicado em `gemini/`, mantend
 - **Conversas persistentes**: histórico local e recuperação de sessões anteriores
 - **Ferramentas customizáveis**: execução de funções Python a partir do modelo
 - **Análise de dados integrada**: sumarização, filtros e agregações em planilhas e tabelas pré-cadastradas
+- **Leitura de PDFs**: preview, leitura paginada e busca de texto em arquivos PDF
 - **Retry automático**: recuperação de falhas transitórias com backoff exponencial
 - **Cache inteligente**: evita chamadas duplicadas e reduz custo de tokens
 - **Logging estruturado**: monitoramento de uso com arquivo JSONL
@@ -201,6 +202,7 @@ print(response.text)
 │   ├── database.py
 │   ├── spreadsheet.py
 │   ├── data_analysis.py        # Agregação e análise de dados em CSV/XLSX e tabelas
+│   ├── pdf_reader.py           # Preview, leitura e busca de texto em PDFs
 │   ├── registry.py
 │   └── tools.py
 ├── gemini_client.py            # Compatibilidade para imports antigos
@@ -281,6 +283,24 @@ print(analyze_table_data(
     top_n=10,
 ))
 ```
+
+### 5. `preview_pdf`, `read_pdf` e `search_in_pdf`
+
+As ferramentas de PDF extraem texto de arquivos `.pdf` usando `pypdf`:
+
+- `preview_pdf`: mostra metadados, número de páginas e um trecho da primeira página
+- `read_pdf`: lê um intervalo paginado, com `start_page` e `max_pages`
+- `search_in_pdf`: busca texto sem diferenciar maiúsculas e minúsculas e retorna o contexto das ocorrências
+
+```python
+from tools.pdf_reader import preview_pdf, read_pdf, search_in_pdf
+
+print(preview_pdf("documentos/relatorio.pdf"))
+print(read_pdf("documentos/relatorio.pdf", start_page=0, max_pages=5))
+print(search_in_pdf("documentos/relatorio.pdf", query="faturamento", max_matches=10))
+```
+
+A numeração de `start_page` é baseada em zero. Quando ainda houver páginas, `read_pdf` informa o próximo valor de `start_page` para continuar. PDFs protegidos por senha, corrompidos ou sem texto extraível retornam uma mensagem explicativa; PDFs escaneados podem exigir OCR, que ainda não está incluído.
 
 ---
 

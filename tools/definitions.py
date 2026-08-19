@@ -329,6 +329,83 @@ TOOL_DEFINITIONS = [
             "required": ["table", "operation"],
         },
     },
+    {
+        "type": "function",
+        "name": "preview_pdf",
+        "description": (
+            "Mostra o número de páginas, metadados básicos (título/autor) e um preview "
+            "do texto da primeira página de um PDF. Use antes de ler ou buscar dados "
+            "para entender a estrutura do documento e detectar se ele tem texto "
+            "extraível (PDFs escaneados/imagem não têm)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Nome do arquivo PDF a ser lido ou caminho completo. Se apenas "
+                        "o nome for informado, o arquivo é localizado automaticamente."
+                    ),
+                }
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "read_pdf",
+        "description": (
+            "Lê o texto de um PDF de forma paginada. Use start_page e max_pages para "
+            "percorrer documentos grandes aos poucos, evitando estourar o contexto."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Caminho do arquivo PDF.",
+                },
+                "start_page": {
+                    "type": "integer",
+                    "description": "Página inicial (0-indexado). Padrão: 0.",
+                },
+                "max_pages": {
+                    "type": "integer",
+                    "description": "Máximo de páginas a retornar nesta chamada. Padrão: 10.",
+                },
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "search_in_pdf",
+        "description": (
+            "Busca um texto (substring, sem diferenciar maiúsculas/minúsculas) em todas "
+            "as páginas de um PDF. Retorna o número da página e um trecho de contexto ao "
+            "redor de cada ocorrência. Útil para localizar um trecho específico sem "
+            "precisar ler o documento inteiro."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Caminho do arquivo PDF.",
+                },
+                "query": {
+                    "type": "string",
+                    "description": "Texto a buscar.",
+                },
+                "max_matches": {
+                    "type": "integer",
+                    "description": "Máximo de ocorrências a retornar. Padrão: 20.",
+                },
+            },
+            "required": ["path", "query"],
+        },
+    },
 ]
  
  
