@@ -61,7 +61,7 @@ def preview_pdf(path: str) -> str:
 
     metadata = reader.metadata
     titulo = (metadata.title if metadata and metadata.title else None) or "N/A"
-    autor = (metadata.author if metadata and metadata.autor else None) or 'N/A'
+    autor = (metadata.author if metadata and metadata.author else None) or 'N/A'
 
     first_page_text = _extract_page_text(reader, 0) if total_pages > 0 else ""
 
