@@ -226,3 +226,4 @@ gemini_cache.json
 gemini_usage_log.jsonl
 
 output/
+.vscode/
