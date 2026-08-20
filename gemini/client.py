@@ -37,6 +37,9 @@ if not logger.handlers:
     logger.addHandler(handler)
 logger.setLevel(logging.INFO)
 
+# Tools cujo retorno pode conter um arquivo gerado (ex: PNG de gráfico) a ser propagado até quem consome o GeminiResponse (ex: gemini_terminal.py decide se mantém ou descarta o arquivo).
+PLOT_TOOL_NAMES = {"plot_sheet_data", "plot_table_data"}
+
 
 class GeminiClient:
     """
@@ -44,6 +47,7 @@ class GeminiClient:
     - retry automático com backoff exponencial para erros transitórios do servidor
     - contagem/registro de uso de tokens (por chamada e acumulado na sessão)
     - log estruturado em arquivo (JSON Lines) para auditar gasto entre execuções
+    - rastreamento de arquivos gerados por tools (ex: gráficos) durante uma chamada
     """
 
     def __init__(
@@ -75,6 +79,9 @@ class GeminiClient:
         self._session_calls = 0
         self._session_cache_hits = 0
 
+        # Reiniciado a cada generate() — arquivos gerados por tools nesta chamada.
+        self._current_generated_files: list[Path] = []
+
     def _get_function_calls(self, interaction) -> list:
         """Retorna todas as chamadas de ferramentas presentes na interação."""
         return [
@@ -100,6 +107,12 @@ class GeminiClient:
         try:
             result = function(**arguments)
             logger.info("Ferramenta '%s' executada com sucesso.", tool_name)
+
+            if tool_name in PLOT_TOOL_NAMES and isinstance(result, dict) and result.get("file_path"):
+                file_path = Path(result["file_path"])
+                self._current_generated_files.append(file_path)
+                logger.info("Arquivo gerado por '%s' registrado: %s", tool_name, file_path)
+
             return result
         except Exception as e:
             logger.exception("Erro ao executar ferramenta '%s'.", tool_name)
@@ -255,6 +268,7 @@ class GeminiClient:
                     interaction_id=cached.get("interaction_id"),
                     process_name=process_name,
                     api_calls=0,
+                    generated_files=[],
                     raw=None,
                 )
                 self._log_usage(response, cached=True)
@@ -269,6 +283,8 @@ class GeminiClient:
         attempt = 0
         while True:
             attempt += 1
+            # Reinicia o rastreamento de arquivos gerados a cada tentativa — se essa tentativa falhar e for reexecutada, não queremos arrastar arquivos órfãos de uma tentativa anterior que não chegou a completar.
+            self._current_generated_files = []
             try:
                 accumulated_input_tokens = 0
                 accumulated_output_tokens = 0
@@ -339,6 +355,7 @@ class GeminiClient:
                     output_tokens=accumulated_output_tokens,
                     total_tokens=accumulated_total_tokens,
                     api_calls=api_calls_made,
+                    generated_files=list(self._current_generated_files),
                 )
 
                 self._log_usage(response)
@@ -387,6 +404,7 @@ class GeminiClient:
         output_tokens: int,
         total_tokens: int,
         api_calls: int = 1,
+        generated_files: Optional[list[Path]] = None,
     ) -> GeminiResponse:
         return GeminiResponse(
             text=interaction.output_text,
@@ -397,6 +415,7 @@ class GeminiClient:
             interaction_id=getattr(interaction, "id", None),
             process_name=process_name,
             api_calls=api_calls,
+            generated_files=generated_files or [],
             raw=interaction,
         )
 

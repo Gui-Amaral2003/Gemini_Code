@@ -1,4 +1,5 @@
 from .database import TABELAS_PERMITIDAS
+from .plotting import VALID_CHART_TYPES
 
 # Descrição das ferramentas que será enviada ao Gemini.
 TOOL_DEFINITIONS = [
@@ -331,6 +332,157 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "name": "plot_sheet_data",
+        "description": (
+            "Gera um gráfico (barra ou linha) a partir de uma análise agregada com "
+            "agrupamento (group_by) sobre uma planilha (.xlsx ou .csv). O gráfico é "
+            "exibido diretamente no terminal e também salvo como PNG. "
+            "Use SOMENTE quando o usuário pedir explicitamente para ver/gerar um "
+            "gráfico, visualização ou plot — para obter apenas um número ou uma "
+            "tabela, use analyze_sheet_data em vez desta ferramenta. "
+            "group_by é obrigatório (não é possível plotar um único valor agregado)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": (
+                        "Nome do arquivo de planilha (.xlsx ou .csv) ou caminho completo. "
+                        "Se apenas o nome for informado, o arquivo é localizado automaticamente."
+                    ),
+                },
+                "sheet_name": {
+                    "type": "string",
+                    "description": "Nome da aba, se aplicável (apenas para .xlsx). Se omitido, usa a primeira aba.",
+                },
+                "operation": {
+                    "type": "string",
+                    "enum": ["sum", "mean", "count", "min", "max", "nunique", "median", "std"],
+                    "description": "Operação de agregação a ser plotada.",
+                },
+                "target_column": {
+                    "type": "string",
+                    "description": (
+                        "Coluna a ser agregada. Obrigatória para todas as operações, exceto "
+                        "'count' (nesse caso, conta o total de linhas por grupo)."
+                    ),
+                },
+                "group_by": {
+                    "type": "string",
+                    "description": "Coluna a usar como eixo de categorias do gráfico. Obrigatório.",
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Lista de condições de filtro aplicadas antes da agregação.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação. LIKE apenas para colunas de texto.",
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Valor de comparação (convertido para o tipo real da coluna).",
+                            },
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Limita o número de categorias plotadas.",
+                },
+                "sort_ascending": {
+                    "type": "boolean",
+                    "description": "Se True, ordena as categorias em ordem crescente. Padrão: decrescente.",
+                },
+                "chart_type": {
+                    "type": "string",
+                    "enum": sorted(VALID_CHART_TYPES),
+                    "description": "Tipo de gráfico. Padrão: 'bar'.",
+                },
+            },
+            "required": ["file_path", "operation", "group_by"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "plot_table_data",
+        "description": (
+            "Gera um gráfico (barra ou linha) a partir de uma análise agregada com "
+            "agrupamento (group_by) sobre uma tabela pré-cadastrada do banco SQL Server. "
+            "O gráfico é exibido diretamente no terminal e também salvo como PNG. "
+            "Use SOMENTE quando o usuário pedir explicitamente para ver/gerar um "
+            "gráfico, visualização ou plot — para obter apenas um número ou uma "
+            "tabela, use analyze_table_data em vez desta ferramenta. "
+            "group_by é obrigatório (não é possível plotar um único valor agregado)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "description": "Nome da tabela pré-cadastrada (ver TABELAS_PERMITIDAS).",
+                },
+                "operation": {
+                    "type": "string",
+                    "enum": ["sum", "mean", "count", "min", "max", "nunique", "median", "std"],
+                    "description": "Operação de agregação a ser plotada.",
+                },
+                "target_column": {
+                    "type": "string",
+                    "description": (
+                        "Coluna a ser agregada. Obrigatória para todas as operações, exceto "
+                        "'count' (nesse caso, conta o total de linhas por grupo)."
+                    ),
+                },
+                "group_by": {
+                    "type": "string",
+                    "description": "Coluna a usar como eixo de categorias do gráfico. Obrigatório.",
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Lista de condições de filtro aplicadas antes da agregação.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação. LIKE apenas para colunas de texto.",
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Valor de comparação (convertido para o tipo real da coluna).",
+                            },
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+                "top_n": {
+                    "type": "integer",
+                    "description": "Limita o número de categorias plotadas.",
+                },
+                "sort_ascending": {
+                    "type": "boolean",
+                    "description": "Se True, ordena as categorias em ordem crescente. Padrão: decrescente.",
+                },
+                "chart_type": {
+                    "type": "string",
+                    "enum": sorted(VALID_CHART_TYPES),
+                    "description": "Tipo de gráfico. Padrão: 'bar'.",
+                },
+            },
+            "required": ["table", "operation", "group_by"],
+        },
+    },
+    {
+        "type": "function",
         "name": "preview_pdf",
         "description": (
             "Mostra o número de páginas, metadados básicos (título/autor) e um preview "
@@ -407,5 +559,3 @@ TOOL_DEFINITIONS = [
         },
     },
 ]
- 
- 

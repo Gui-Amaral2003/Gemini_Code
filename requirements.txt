@@ -30,3 +30,7 @@ openpyxl>=3.0.0
 
 # Leitura e extração de texto de arquivos PDF
 pypdf>=5.0.0
+
+# Geração de gráficos (plot_sheet_data / plot_table_data)
+matplotlib>=3.7.0
+plotext>=5.2.8
