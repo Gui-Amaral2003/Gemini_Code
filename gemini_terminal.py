@@ -3,11 +3,16 @@
 ##TODO: 3. Solicitar dados que não existe, para garantir que o modelo não vai invertar dados
 ##TODO: 4. Adicionar uma busca por arqruivos mais robusta
 ##TODO: 5. Testar o analyze_table_data
+##TODO: 6. Refinar a instrução sobre quando chamar plot_sheet_data/plot_table_data (evitar que o modelo gere gráfico quando o usuário só queria um número)
+##TODO: 7. Adicionar os tests para filesystem, database, pdf_reader e GeminiClient
+
+from pathlib import Path
 from gemini import GeminiClient, ChatSession
 from rich.console import Console
 from rich.markdown import Markdown
 
 SESSION_ID = 'teste'
+PLOTS_DIR = Path("output") / "plots"
 
 console = Console()
 
@@ -19,8 +24,6 @@ def main():
         session_id = SESSION_ID,
         system_instruction = """
         Você é meu assistente técnico de programação.
-        O usuário trabalha principalmente com dois ambientes:
-
         Responda de forma ojetiva e técnica. 
         Mantenha o contexto da conversa
 
@@ -41,6 +44,12 @@ def main():
         - read_sheet/preview_sheet/query_table só servem para exibir linhas/registros ao usuário
         ou para descobrir nomes de colunas — nunca como substituto de analyze_sheet_data/
         analyze_table_data para produzir um resultado agregado.
+
+        REGRA SOBRE GRÁFICOS:
+        Só chame plot_sheet_data ou plot_table_data quando o usuário pedir explicitamente
+        para ver, gerar ou visualizar um gráfico/plot. Se o usuário só pediu um número, uma
+        soma, uma média ou uma tabela, use analyze_sheet_data/analyze_table_data — NUNCA
+        chame as ferramentas de plot nesse caso.
         """
     )
 
@@ -90,12 +99,39 @@ def main():
             print("\nGemini >")
             console.print(Markdown(response.text))
 
+            if response.generated_files:
+                handle_generated_files(response.generated_files)
+
         except KeyboardInterrupt:
             print("\nEncerrando...")
             break
 
         except Exception as e:
             print(f"\nErro: {e}")
+
+def handle_generated_files(files: list[Path]) -> None:
+    """Pergunta ao usuário, para cada arquivo gerado nesta resposta (ex: gráficos),
+    se ele quer manter (move para PLOTS_DIR) ou descartar (deleta do staging)."""
+    for file_path in files:
+        if not file_path.exists():
+            continue
+
+        resposta = input(
+            f"\nSalvar o gráfico gerado ({file_path.name})? [s/N] "
+        ).strip().lower()
+
+        if resposta == "s":
+            PLOTS_DIR.mkdir(parents=True, exist_ok=True)
+            destino = PLOTS_DIR / file_path.name
+            file_path.replace(destino)
+            print(f"Salvo em: {destino}")
+        else:
+            try:
+                file_path.unlink()
+            except OSError as e:
+                print(f"Não consegui remover o arquivo temporário {file_path}: {e}")
+            else:
+                print("Descartado.")
 
 def print_help() -> None:
     print("""
