@@ -1,8 +1,8 @@
 # Gemini Client
 
-Cliente Python para a [Google Gemini API](https://ai.google.dev/) com suporte a conversas persistentes, ferramentas customizáveis, retry automático, cache e terminal interativo.
+Cliente Python para a [Google Gemini API](https://ai.google.dev/) com suporte a conversas persistentes, ferramentas customizáveis, retry automático, cache, roteamento entre modelos e terminal interativo.
 
-A biblioteca foi reorganizada em um pacote Python dedicado em `gemini/`, mantendo compatibilidade via o wrapper no arquivo raiz `gemini_client.py`.
+A biblioteca foi reorganizada em um pacote Python dedicado em `gemini/`. O arquivo `old_gemini_client.py` é mantido como referência para a implementação anterior.
 
 > ⚠️ **Em Desenvolvimento**: Este projeto ainda está em fase inicial. Novas ferramentas e funcionalidades serão adicionadas frequentemente.
 
@@ -16,12 +16,14 @@ A biblioteca foi reorganizada em um pacote Python dedicado em `gemini/`, mantend
 - **Leitura de PDFs**: preview, leitura paginada e busca de texto em arquivos PDF
 - **Retry automático**: recuperação de falhas transitórias com backoff exponencial
 - **Cache inteligente**: evita chamadas duplicadas e reduz custo de tokens
+- **Roteamento multi-modelo**: usa um modelo mais barato para sintetizar a resposta depois de ferramentas terminais, preservando o modelo forte para decisões de novas ferramentas
+- **Geração de gráficos**: cria gráficos de barras ou linhas no terminal e salva PNGs temporários para aprovação do usuário
 - **Logging estruturado**: monitoramento de uso com arquivo JSONL
 - **Terminal interativo**: CLI de demonstração e uso prático
 
 ## 📋 Requisitos
 
-- Python 3.8+
+- Python 3.10+
 - Chave de API do Google Gemini: [ai.google.dev](https://ai.google.dev/)
 
 ## 🚀 Instalação
@@ -69,7 +71,7 @@ A importação recomendada agora é via o pacote `gemini`:
 from gemini import GeminiClient, ChatSession, load_processes, run_process
 ```
 
-O arquivo raiz `gemini_client.py` continua funcionando como compatibilidade para imports antigos, mas a organização oficial do projeto passou a ficar em `gemini/`.
+O arquivo `old_gemini_client.py` contém a implementação anterior para referência. A organização oficial do projeto fica em `gemini/`.
 
 ## 🧪 Exemplos de Uso
 
@@ -136,6 +138,57 @@ response = client.generate(
 print(response.text)
 ```
 
+Para perguntas que exigem soma, média, contagem, mínimo, máximo ou outra agregação,
+as ferramentas `analyze_sheet_data` e `analyze_table_data` devem ser usadas. As
+ferramentas `read_sheet`, `preview_sheet` e `query_table` servem para explorar ou
+exibir dados, não para substituir uma agregação calculada pela ferramenta.
+
+### Roteamento entre modelos
+
+O cliente pode usar um modelo mais barato na etapa de síntese depois que todas as
+ferramentas chamadas em uma rodada forem terminais. Isso reduz o custo sem transferir
+para o modelo barato a decisão de qual ferramenta chamar. Se o modelo barato pedir
+outra ferramenta, a rodada é refeita com o modelo padrão.
+
+```python
+from gemini import GeminiClient
+
+client = GeminiClient(
+    default_model="gemini-3.6-flash",
+    cheap_model="gemini-3.5-flash-lite",
+)
+
+response = client.generate(
+    "Calcule as vendas por segmento em examples/SampleSuperstore.csv"
+)
+print(response.text)
+```
+
+O roteamento considera terminais `analyze_sheet_data`, `analyze_table_data`,
+`plot_sheet_data`, `plot_table_data`, `search_in_pdf` e `search_in_sheet`. Ferramentas
+exploratórias, como `preview_sheet`, `read_sheet`, `query_table` e `read_pdf`, mantêm
+o modelo forte para a próxima decisão.
+
+### Geração de gráficos
+
+Use `plot_sheet_data` para CSV/Excel ou `plot_table_data` para tabelas permitidas no
+banco. Os tipos disponíveis são `bar` e `line`.
+
+```python
+response = client.generate(
+    "Gere um gráfico de barras das vendas por segmento em "
+    "examples/SampleSuperstore.csv"
+)
+
+for file_path in response.generated_files:
+    print(f"PNG gerado: {file_path}")
+```
+
+As ferramentas exibem uma versão no terminal e salvam o PNG em
+`output/plots_staging/`. O `GeminiResponse.generated_files` contém os arquivos
+gerados. No terminal interativo, o usuário decide se cada arquivo será movido para
+`output/plots/` ou descartado.
+
 ### Registrando processos reutilizáveis
 
 ```python
@@ -194,6 +247,7 @@ print(response.text)
 │   ├── config.py               # Configurações e caminhos padrão
 │   ├── cache.py                # Cache de prompts e respostas
 │   ├── retry.py                # Lógica de retry
+│   ├── model_routing.py        # Classificação de tools e roteamento de modelos
 │   └── ...
 ├── tools/
 │   ├── __init__.py
@@ -203,9 +257,9 @@ print(response.text)
 │   ├── spreadsheet.py
 │   ├── data_analysis.py        # Agregação e análise de dados em CSV/XLSX e tabelas
 │   ├── pdf_reader.py           # Preview, leitura e busca de texto em PDFs
-│   ├── registry.py
-│   └── tools.py
-├── gemini_client.py            # Compatibilidade para imports antigos
+│   ├── plotting.py             # Renderização no terminal e geração de PNGs
+│   └── registry.py              # Registro das ferramentas executáveis
+├── old_gemini_client.py        # Implementação anterior, mantida para referência
 ├── gemini_terminal.py          # CLI interativa
 ├── process.yaml                # Definição de processos reutilizáveis
 ├── requirements.txt
@@ -302,6 +356,29 @@ print(search_in_pdf("documentos/relatorio.pdf", query="faturamento", max_matches
 
 A numeração de `start_page` é baseada em zero. Quando ainda houver páginas, `read_pdf` informa o próximo valor de `start_page` para continuar. PDFs protegidos por senha, corrompidos ou sem texto extraível retornam uma mensagem explicativa; PDFs escaneados podem exigir OCR, que ainda não está incluído.
 
+### 6. `plot_sheet_data` e `plot_table_data`
+
+Geram gráficos a partir de uma planilha ou tabela permitida, respectivamente. As
+operações de agregação são as mesmas de `analyze_sheet_data` e `analyze_table_data`;
+`chart_type` aceita `bar` ou `line`.
+
+```python
+from tools.data_analysis import plot_sheet_data
+
+png_path = plot_sheet_data(
+    file_path="examples/SampleSuperstore.csv",
+    operation="sum",
+    target_column="Sales",
+    group_by="Segment",
+    chart_type="bar",
+)
+print(png_path)
+```
+
+O gráfico também é renderizado no terminal com `plotext`. O arquivo PNG é salvo
+temporariamente em `output/plots_staging/`; a aplicação que chamou o cliente é
+responsável por movê-lo ou removê-lo.
+
 ---
 
 ## 🔄 Fluxo de Execução com Ferramentas
@@ -364,10 +441,11 @@ print(f"Total: {response.total_tokens}")
 summary = client.session_summary()
 print(summary)
 # {
-#     "total_input_tokens": 1234,
-#     "total_output_tokens": 5678,
-#     "total_calls": 12,
-#     "cache_hits": 3
+#     "calls": 12,
+#     "cache_hits": 3,
+#     "input_tokens": 1234,
+#     "output_tokens": 5678,
+#     "total_tokens": 6912
 # }
 ```
 
@@ -403,6 +481,7 @@ from gemini import GeminiClient
 client = GeminiClient(
     api_key="sua_chave",
     default_model="gemini-3.5-flash",
+    cheap_model="gemini-3.5-flash-lite",
     max_retries=3,
     use_cache=True,
     fallback_models=[
