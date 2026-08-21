@@ -1,11 +1,26 @@
 from pathlib import Path
 from typing import Optional
+from .confirmation import confirm_action
 
 ALLOWED_SEARCH_DIRS = [
     Path.home() / 'Documents'
 ]
 
 MAX_SEARCH_RESULTS = 5 #Evita listas grandes em caso de nome genérico
+
+OUTPUT_DIR = Path('output')
+
+ALLOWED_CREATE_EXTENSIONS = {
+    ".py",
+    ".txt",
+    ".md",
+    ".csv",
+    ".json",
+    ".yaml",
+    ".yml",
+    ".sql",
+    ".log",
+}
 
 def resolve_file_path(
     name_or_path: str,
@@ -83,3 +98,55 @@ def read_file(path: str) -> str:
 
     except OSError as e:
         return f"Erro ao ler o arquivo: {path}. Detalhes: {e}"
+
+def create_file(filename: str, content: str) -> dict:
+    """
+    Cria um arquivo de texto dentro de output/
+
+    Aceita somente o nome do arquivo, nunca um path
+    """
+
+    file_path = Path(filename)
+
+    if file_path.name != filename:
+        return {
+            "error": (
+                "O filename deve conter somente o nome do arquivo, "
+                "sem diretórios ou caminhos."
+            )
+        }
+
+    extension = file_path.suffix.lower()
+
+    if extension not in ALLOWED_CREATE_EXTENSIONS:
+        return {
+            'error': (
+                f"Extensão '{extension}' não permitida. "
+                f"Use uma das seguintes: {', '.join(ALLOWED_CREATE_EXTENSIONS)}"
+            )
+        }
+
+    OUTPUT_DIR.mkdir(parents = True, exist_ok = True)
+
+    destination = OUTPUT_DIR / file_path.name
+
+    if destination.exists():
+        if not confirm_action(f"O arquivo '{destination}' já existe. Sobrescrever?"):
+            return {
+                "success": False,
+                "message": "Operação cancelada pelo usuário."
+            }
+
+    try:
+        destination.write_text(content, encoding = 'utf-8')
+
+        return {
+            "success": True,
+            "file_path": str(destination),
+            "message": f"Arquivo criado com sucesso: {destination}",
+        }
+
+    except OSError as e:
+        return {
+            'error': f"Erro ao criar o arquivo: {e}"
+        }

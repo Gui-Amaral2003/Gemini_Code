@@ -253,6 +253,8 @@ print(response.text)
 │   ├── __init__.py
 │   ├── definitions.py
 │   ├── filesystem.py
+│   ├── confirmation.py          # Confirmações explícitas para operações sensíveis
+│   ├── script_runner.py         # Execução confirmada de scripts Python
 │   ├── database.py
 │   ├── spreadsheet.py
 │   ├── data_analysis.py        # Agregação e análise de dados em CSV/XLSX e tabelas
@@ -284,7 +286,48 @@ response = client.generate("Qual é o tamanho do arquivo config.yaml?")
 **Parâmetros:**
 - `path` (str): Caminho do arquivo
 
-### 2. `query_table`
+### 2. `create_file`
+
+Cria um arquivo dentro de `output/`. A ferramenta aceita somente o nome do arquivo,
+sem diretórios ou caminhos, e permite as extensões `.py`, `.txt`, `.md`, `.csv`,
+`.json`, `.yaml`, `.yml`, `.sql` e `.log`. Se o arquivo já existir, solicita
+confirmação antes de sobrescrevê-lo.
+
+```python
+from tools import create_file
+
+result = create_file(
+    filename="analise.py",
+    content="print('Olá')\n",
+)
+print(result)
+```
+
+O retorno indica sucesso ou erro e, quando criado, informa o caminho em
+`file_path`.
+
+### 3. `run_script`
+
+Executa um script Python após confirmação explícita do usuário. O caminho pode ser
+o arquivo criado por `create_file` ou outro arquivo `.py` existente. A execução usa
+o mesmo interpretador Python do cliente, não usa `shell`, e é interrompida após 30
+segundos.
+
+```python
+from tools import run_script
+
+result = run_script("output/analise.py")
+print(result["message"])
+print(result.get("stdout", ""))
+print(result.get("stderr", ""))
+```
+
+O resultado inclui `success`, `returncode`, `stdout` e `stderr`. Para evitar respostas
+excessivamente grandes, `stdout` e `stderr` ficam limitados aos últimos 3.000
+caracteres. Scripts cancelados, inexistentes, que não sejam arquivos `.py`, ou que
+excedam o tempo limite retornam uma mensagem de erro ou cancelamento.
+
+### 4. `query_table`
 
 Executa consultas SELECT em tabelas pré-cadastradas do banco de dados (atualmente com foco em SQL Server).
 
@@ -305,7 +348,7 @@ result = query_table(
 print(result)
 ```
 
-### 3. `analyze_sheet_data`
+### 5. `analyze_sheet_data`
 
 Carrega um CSV ou Excel e aplica agregações, filtros e agrupamentos em uma única chamada.
 
@@ -323,7 +366,7 @@ print(analyze_sheet_data(
 ))
 ```
 
-### 4. `analyze_table_data`
+### 6. `analyze_table_data`
 
 Executa a mesma lógica sobre uma tabela permitida do banco de dados, aplicando filtros em memória após o carregamento.
 
@@ -338,7 +381,7 @@ print(analyze_table_data(
 ))
 ```
 
-### 5. `preview_pdf`, `read_pdf` e `search_in_pdf`
+### 7. `preview_pdf`, `read_pdf` e `search_in_pdf`
 
 As ferramentas de PDF extraem texto de arquivos `.pdf` usando `pypdf`:
 
@@ -356,7 +399,7 @@ print(search_in_pdf("documentos/relatorio.pdf", query="faturamento", max_matches
 
 A numeração de `start_page` é baseada em zero. Quando ainda houver páginas, `read_pdf` informa o próximo valor de `start_page` para continuar. PDFs protegidos por senha, corrompidos ou sem texto extraível retornam uma mensagem explicativa; PDFs escaneados podem exigir OCR, que ainda não está incluído.
 
-### 6. `plot_sheet_data` e `plot_table_data`
+### 8. `plot_sheet_data` e `plot_table_data`
 
 Geram gráficos a partir de uma planilha ou tabela permitida, respectivamente. As
 operações de agregação são as mesmas de `analyze_sheet_data` e `analyze_table_data`;

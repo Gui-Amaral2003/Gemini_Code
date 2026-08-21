@@ -1,4 +1,5 @@
-from .filesystem import read_file
+from .filesystem import read_file, create_file
+from .script_runner import run_script
 from .spreadsheet import (
     list_sheets,
     preview_sheet,
@@ -17,6 +18,8 @@ from .pdf_reader import preview_pdf, read_pdf, search_in_pdf
 # Funções que o Python realmente pode executar.
 TOOLS = {
     "read_file": read_file,
+    "create_file": create_file,
+    "run_script": run_script,
     'query_table': query_table,
     'list_sheets': list_sheets,
     'preview_sheet': preview_sheet,

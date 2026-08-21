@@ -84,6 +84,7 @@ class GeminiClient:
 
         # Reiniciado a cada generate() — arquivos gerados por tools nesta chamada.
         self._current_generated_files: list[Path] = []
+        self._created_files_this_session: set[Path] = set()
 
     def _get_function_calls(self, interaction) -> list:
         """Retorna todas as chamadas de ferramentas presentes na interação."""
@@ -108,15 +109,42 @@ class GeminiClient:
         function = TOOLS[tool_name]
 
         try:
+            # run_script só pode executar arquivos criados nesta sessão através de create_file.
+            if tool_name == "run_script":
+                requested_path = Path(arguments.get("path", "")).resolve()
+
+                if requested_path not in self._created_files_this_session:
+                    return {
+                        "error": (
+                            "Execução bloqueada. Só é permitido executar scripts "
+                            "criados nesta sessão através da ferramenta create_file."
+                        )
+                    }
+
             result = function(**arguments)
+
             logger.info("Ferramenta '%s' executada com sucesso.", tool_name)
 
-            if tool_name in PLOT_TOOL_NAMES and isinstance(result, dict) and result.get("file_path"):
+            # Registra arquivos criados pelo create_file
+            if (tool_name == "create_file" and isinstance(result, dict) and result.get("success") and result.get("file_path")):
+                created_path = Path(result["file_path"]).resolve()
+
+                self._created_files_this_session.add(created_path)
+
+                logger.info(
+                    "Arquivo criado nesta sessão registrado: %s",
+                    created_path,
+                )
+
+            # Gerar arquivos de ferramentas de plotagem (ex: gráficos) para propagar no GeminiResponse.
+            if (tool_name in PLOT_TOOL_NAMES and isinstance(result, dict) and result.get("file_path")):
                 file_path = Path(result["file_path"])
                 self._current_generated_files.append(file_path)
+
                 logger.info("Arquivo gerado por '%s' registrado: %s", tool_name, file_path)
 
             return result
+
         except Exception as e:
             logger.exception("Erro ao executar ferramenta '%s'.", tool_name)
             return {"error": str(e)}

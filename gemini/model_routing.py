@@ -34,6 +34,8 @@ EXPLORATORY_TOOLS = {
     "read_sheet",
     "preview_pdf",
     "read_pdf",
+    "create_file",
+    'run_script' ##Interessante o modelo mais forte interpretar o script caso der erro
 }
 
 def all_terminal(tool_names: list[str]) -> bool:

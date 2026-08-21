@@ -23,6 +23,52 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "name": "create_file",
+        "description": (
+            "Cria um arquivo de texto ou código dentro da pasta output/. "
+            "Aceita somente o nome do arquivo, nunca caminhos ou diretórios. "
+            "Use para criar scripts, arquivos de dados, SQL, Markdown, JSON, Python etc."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "filename": {
+                    "type": "string",
+                    "description": (
+                        "Somente o nome do arquivo, por exemplo 'analise.py'. "
+                        "Não informe diretórios ou caminhos."
+                    ),
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Conteúdo completo que será escrito no arquivo.",
+                },
+            },
+            "required": ["filename", "content"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "run_script",
+        "description": (
+            "Executa um script Python criado nesta sessão pelo create_file. "
+            "A execução sempre exige confirmação explícita do usuário."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": (
+                        "Caminho do script Python que deve ser executado."
+                    ),
+                },
+            },
+            "required": ["path"],
+        },
+    },
+    {
+        "type": "function",
         "name": "query_table",
         "description": (
             "Consulta dados em uma tabela pré-cadastrada do banco de dados. "
