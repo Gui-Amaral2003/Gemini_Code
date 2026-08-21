@@ -5,7 +5,9 @@
 ##TODO: 5. Testar o analyze_table_data
 ##TODO: 6. Refinar a instrução sobre quando chamar plot_sheet_data/plot_table_data (evitar que o modelo gere gráfico quando o usuário só queria um número)
 ##TODO: 7. Adicionar os tests para filesystem, database, pdf_reader e GeminiClient
-
+##TODO: 8. Limpeza de arquivos
+##TODO: 9. Prosseguir com a criação dos tests
+##TODO 10. Testar economia gerada pelo model_routing
 from pathlib import Path
 from gemini import GeminiClient, ChatSession
 from rich.console import Console
@@ -17,7 +19,7 @@ PLOTS_DIR = Path("output") / "plots"
 console = Console()
 
 def main():
-    client = GeminiClient()
+    client = GeminiClient(cheap_model = 'gemini-3.5-flash-lite')
 
     chat = ChatSession(
         client = client,

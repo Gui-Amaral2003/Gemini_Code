@@ -21,6 +21,7 @@ from .config import (
     DEFAULT_USAGE_LOG_PATH,
     RETRYABLE_ERRORS,
 )
+from .model_routing import all_terminal
 from .models import GeminiResponse, Message
 
 try:
@@ -59,9 +60,11 @@ class GeminiClient:
         use_cache: bool = True,
         cache_path: Path | str = DEFAULT_CACHE_PATH,
         fallback_models: Optional[list[str]] = None,
+        cheap_model: Optional[str] = None,
     ):
         self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
         self.default_model = default_model
+        self.cheap_model = cheap_model
         self.fallback_models = fallback_models or [
             "gemini-3.6-flash",
             "gemini-3.5-flash-lite",
@@ -317,9 +320,11 @@ class GeminiClient:
 
                     logger.info("Gemini solicitou %d ferramenta(s).", len(function_calls))
                     function_results = []
+                    tool_names_this_round = []
 
                     for step in function_calls:
                         result = self._execute_tool_call(step)
+                        tool_names_this_round.append(step.name)
                         function_results.append(
                             {
                                 "type": "function_result",
@@ -338,14 +343,39 @@ class GeminiClient:
                             }
                         )
 
+                    # Roteamento multi-modelo: se TODAS as tools chamadas nesta rodada forem "terminais" (ver gemini/model_routing.py), a próxima chamada é candidata a rodar no modelo barato — o próximo passo esperado é sintetizar a resposta final, não decidir mais tool calls.
+                    next_model_preference = current_model
+                    used_cheap_model = False
+                    if self.cheap_model and all_terminal(tool_names_this_round):
+                        next_model_preference = self.cheap_model
+                        used_cheap_model = True
+
+                    prior_interaction_id = interaction.id
+
                     interaction, current_model = self._create_with_fallback(
                         input=function_results,
                         tools=TOOL_DEFINITIONS,
-                        previous_interaction_id=interaction.id,
-                        preferred_model=current_model,
+                        previous_interaction_id=prior_interaction_id,
+                        preferred_model=next_model_preference,
                         system_instruction=system,
                     )
                     _accumulate_usage(interaction)
+
+                    # Rede de segurança: o modelo barato foi chamado pra sintetizar, mas pediu mais ferramentas em vez disso — a decisão de qual tool chamar não é confiável nesse modelo, então descarta essa resposta e refaz a MESMA rodada com o modelo forte, a partir do mesmo ponto da conversa (prior_interaction_id).
+                    if used_cheap_model and self._get_function_calls(interaction):
+                        logger.info(
+                            "Modelo barato ('%s') pediu mais ferramentas em vez de "
+                            "sintetizar; refazendo a rodada com o modelo forte.",
+                            self.cheap_model,
+                        )
+                        interaction, current_model = self._create_with_fallback(
+                            input=function_results,
+                            tools=TOOL_DEFINITIONS,
+                            previous_interaction_id=prior_interaction_id,
+                            preferred_model=self.default_model,
+                            system_instruction=system,
+                        )
+                        _accumulate_usage(interaction)
 
                 response = self._to_response(
                     interaction,
