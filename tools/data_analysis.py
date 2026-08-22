@@ -5,9 +5,8 @@ import pandas as pd
 from .validation import (
     validate_conditions,
     QueryValidationError,
-    _validate_identifier
 )
-from .database import TABELAS_PERMITIDAS, MAX_ROWS, QUERY_TIMEOUT_SECONDS
+from .database import fetch_table_dataframe
 from .filesystem import resolve_file_path
 from .plotting import render_and_save, VALID_CHART_TYPES
 
@@ -136,7 +135,9 @@ def _analyze_data(df: pd.DataFrame, operation: str, target_column: str | None = 
     operation: sum, mean, count, min, max, nunique, median, std
     target_column: coluna a agregar (opcional se operation="count" e group_by=None)
     group_by: uma única coluna de agrupamento (TODO: suportar múltiplas colunas/métricas)
-    conditions: mesmo formato de filtro usado em query_table
+    conditions: filtro a ser aplicado em pandas sobre o df recebido. Use None quando
+        o filtro já tiver sido aplicado antes (ex: tabelas do banco, filtradas no SQL
+        por fetch_table_dataframe) para evitar filtrar duas vezes.
     top_n: limita quantas linhas do groupby são retornadas
     sort_ascending: ordena o resultado do groupby pelo valor agregado
     """
@@ -209,44 +210,6 @@ def _load_sheet_dataframe(file_path: str, sheet_name: str | None) -> tuple[pd.Da
         return None, f"Erro ao ler o arquivo: {e}"
  
  
-def _load_table_dataframe(table: str) -> tuple[pd.DataFrame | None, str | None]:
-    """Carrega uma tabela pré-cadastrada (limitada a MAX_ROWS) como DataFrame. Retorna (df, error)."""
-    import os
-    import sqlalchemy
- 
-    if table not in TABELAS_PERMITIDAS:
-        return None, (
-            f"Tabela não permitida: {table}. "
-            f"Disponíveis: {list(TABELAS_PERMITIDAS)}"
-        )
- 
-    config = TABELAS_PERMITIDAS[table]
-    schema = config["schema"]
-    colunas_retorno = config["colunas_retorno"]
- 
-    _validate_identifier(schema, "schema")
-    _validate_identifier(table, "tabela")
-    for col in colunas_retorno:
-        _validate_identifier(col, "coluna de retorno")
- 
-    colunas_sql = ", ".join(f"[{c}]" for c in colunas_retorno)
-    sql = f"SELECT TOP {MAX_ROWS} {colunas_sql} FROM [{schema}].[{table}]"
- 
-    try:
-        conn_string = os.environ.get("DB_CONN_STRING")
-        engine = sqlalchemy.create_engine(conn_string, connect_args={"timeout": QUERY_TIMEOUT_SECONDS})
- 
-        with engine.connect() as conn:
-            df = pd.read_sql(sqlalchemy.text(sql), conn)
-    except Exception as e:
-        return None, f"Erro ao carregar a tabela: {e}"
- 
-    if df.empty:
-        return None, "Nenhum dado encontrado na tabela."
- 
-    return df, None
- 
- 
 # --------------------------------------------------------------------------- #
 # Tools expostas ao Gemini — análise (retornam texto)
 # --------------------------------------------------------------------------- #
@@ -273,11 +236,12 @@ def analyze_sheet_data(file_path: str, sheet_name: str | None = None, operation:
  
 def analyze_table_data(table: str, operation: str = "sum", target_column: str | None = None, group_by: str | None = None, conditions: list[dict] | None = None, top_n: int | None = None, sort_ascending: bool = False) -> str:
     """
-    Carrega uma tabela pré-cadastrada em TABELAS_PERMITIDAS (sem aplicar filtro no SQL,
-    apenas o limite de segurança MAX_ROWS) e executa uma análise agregada sobre ela.
-    O filtro (conditions) é sempre aplicado em pandas, dentro de _analyze_data.
+    Carrega uma tabela pré-cadastrada em TABELAS_PERMITIDAS já filtrada no SQL
+    (via fetch_table_dataframe, que aplica conditions no WHERE antes do corte
+    por MAX_ROWS) e executa uma análise agregada sobre ela. O filtro NÃO é
+    reaplicado em pandas — já veio aplicado no banco.
     """
-    df, error = _load_table_dataframe(table)
+    df, error = fetch_table_dataframe(table, conditions)
     if error:
         return error
  
@@ -286,7 +250,7 @@ def analyze_table_data(table: str, operation: str = "sum", target_column: str | 
         operation=operation,
         target_column=target_column,
         group_by=group_by,
-        conditions=conditions,
+        conditions=None,
         top_n=top_n,
         sort_ascending=sort_ascending,
     )
@@ -376,11 +340,12 @@ def plot_sheet_data(file_path: str, sheet_name: str | None = None, operation: st
  
 def plot_table_data(table: str, operation: str = "sum", target_column: str | None = None, group_by: str | None = None, conditions: list[dict] | None = None, top_n: int | None = None, sort_ascending: bool = False, chart_type: str = "bar"):
     """
-    Gera um gráfico a partir de uma agregação sobre uma tabela pré-cadastrada do banco:
-    exibe direto no terminal (plotext) e salva um PNG temporário em disco.
-    Requer group_by. O filtro (conditions) é aplicado em pandas após o carregamento.
+    Gera um gráfico a partir de uma agregação sobre uma tabela pré-cadastrada do
+    banco: o filtro (conditions) é aplicado no SQL via fetch_table_dataframe,
+    antes do corte por MAX_ROWS. Exibe direto no terminal (plotext) e salva um
+    PNG temporário em disco. Requer group_by.
     """
-    df, error = _load_table_dataframe(table)
+    df, error = fetch_table_dataframe(table, conditions)
     if error:
         return error
  
@@ -389,9 +354,8 @@ def plot_table_data(table: str, operation: str = "sum", target_column: str | Non
         operation=operation,
         target_column=target_column,
         group_by=group_by,
-        conditions=conditions,
+        conditions=None,
         top_n=top_n,
         sort_ascending=sort_ascending,
         chart_type=chart_type,
     )
- 
