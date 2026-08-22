@@ -9,16 +9,48 @@
 ##TODO: 9. Prosseguir com a criação dos tests
 ##TODO 10. Testar economia gerada pelo model_routing
 from pathlib import Path
+import logging
 from gemini import GeminiClient, ChatSession
+from tools.definitions import TOOL_DEFINITIONS
 from rich.console import Console
 from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.prompt import Prompt, Confirm
+from rich.status import Status
+from rich.table import Table
+from rich.text import Text
+from rich import box
 
 SESSION_ID = 'teste'
 PLOTS_DIR = Path("output") / "plots"
 
+## paleta central — mude aqui pra afetar o app inteiro
+STYLE_USER = "bold cyan"
+STYLE_GEMINI = "bold magenta"
+STYLE_SYSTEM = "dim"
+STYLE_ERROR = "bold red"
+STYLE_ACCENT = "bright_yellow"
+
 console = Console()
 
+# Agrupamento só para exibição no /tools — não tem relação com o roteamento multi-modelo (ver gemini/model_routing.py), que classifica por posição provável na cadeia de tool-calling, não por domínio.
+TOOL_CATEGORIES = {
+    "Arquivos e scripts": ["read_file", "create_file", "run_script"],
+    "Banco de dados": ["query_table"],
+    "Planilhas": ["list_sheets", "preview_sheet", "read_sheet", "search_in_sheet"],
+    "Análise de dados": ["analyze_sheet_data", "analyze_table_data"],
+    "Gráficos": ["plot_sheet_data", "plot_table_data"],
+    "PDF": ["preview_pdf", "read_pdf", "search_in_pdf"],
+}
+
+##Config de log, utilizar a *_VISIBLE para debug e *_HIDDEN para produção, assim conseguimos ver os erros/avisos mesmo com log oculto
+##NÃO MUDE NA CONFIG DO LOG, UTILIZE O /logs
+GEMINI_LOGGER_NAME = "gemini_client"
+LOG_LEVEL_VISIBLE = logging.INFO
+LOG_LEVEL_HIDDEN = logging.WARNING  # erros/avisos continuam aparecendo mesmo "oculto"
+
 def main():
+    logging.getLogger(GEMINI_LOGGER_NAME).setLevel(LOG_LEVEL_VISIBLE)
     client = GeminiClient(cheap_model = 'gemini-3.5-flash-lite')
 
     chat = ChatSession(
@@ -55,28 +87,17 @@ def main():
         """
     )
 
-    print("=" * 70)
-    print(" Gemini Terminal")
-    print("=" * 70)
-    print(f"Sessão: {SESSION_ID}")
-    print()
-    print("Comandos:")
-    print("  /help      - mostra os comandos")
-    print("  /history   - mostra o histórico")
-    print("  /clear     - limpa o contexto")
-    print("  /tokens    - mostra consumo")
-    print("  /exit      - sair")
-    print("=" * 70)
+    print_banner()
 
     while True:
         try:
-            user_input = input("\nVocê > ").strip()
+            user_input = Prompt.ask(f"\n[{STYLE_USER}]Você[/{STYLE_USER}]").strip()
 
             if not user_input:
                 continue
 
             if user_input == "/exit":
-                print("See You Space Cowboy...")
+                console.print(Panel("See You Space Cowboy...", style=STYLE_SYSTEM, box=box.ROUNDED))
                 break
 
             if user_input == "/help":
@@ -89,27 +110,220 @@ def main():
 
             if user_input == "/clear":
                 chat.clear_history()
-                print("Contexto limpo.")
+                console.print(Panel("Contexto limpo.", style=STYLE_SYSTEM, box=box.ROUNDED))
+                continue
+
+            if user_input == "/tools" or user_input.startswith("/tools "):
+                arg = user_input[len("/tools"):].strip()
+                print_tools(arg or None)
                 continue
 
             if user_input == "/tokens":
-                print(client.session_summary())
+                print_tokens(client)
                 continue
 
-            response = chat.send(user_input)
+            if user_input == '/logs':
+                toggle_logs()
+                continue
 
-            print("\nGemini >")
-            console.print(Markdown(response.text))
+            with Status("[dim]Gemini está pensando...[/dim]", console=console, spinner="dots"):
+                response = chat.send(user_input)
+
+            print_response(response.text)
 
             if response.generated_files:
                 handle_generated_files(response.generated_files)
 
         except KeyboardInterrupt:
-            print("\nEncerrando...")
+            console.print(Panel("Encerrando...", style=STYLE_SYSTEM, box=box.ROUNDED))
             break
 
         except Exception as e:
-            print(f"\nErro: {e}")
+            print_error(str(e))
+
+
+# --------------------------------------------------------------------------- #
+# Renderização
+# --------------------------------------------------------------------------- #
+
+def print_banner() -> None:
+    title = Text("Gemini Terminal", style=f"{STYLE_ACCENT} bold")
+    body = Text.from_markup(
+        f"Sessão ativa: [{STYLE_ACCENT}]{SESSION_ID}[/{STYLE_ACCENT}]\n\n"
+        "[bold]Comandos[/bold]\n"
+        "  [cyan]/help[/cyan]     mostra os comandos\n"
+        "  [cyan]/history[/cyan]  mostra o histórico\n"
+        "  [cyan]/clear[/cyan]    limpa o contexto\n"
+        "  [cyan]/tools[/cyan]    mostra as ferramentas, /tools <nome> para detalhes\n"
+        "  [cyan]/logs[/cyan]     alterna visibilidade dos logs\n"
+        "  [cyan]/tokens[/cyan]   mostra consumo\n"
+        "  [cyan]/exit[/cyan]     sair"
+    )
+    console.print(
+        Panel(body, title=title, border_style=STYLE_ACCENT, box=box.ROUNDED, padding=(1, 2))
+    )
+
+
+def print_response(text: str) -> None:
+    console.print(
+        Panel(
+            Markdown(text),
+            title=Text("Gemini", style=STYLE_GEMINI),
+            title_align="left",
+            border_style=STYLE_GEMINI,
+            box=box.ROUNDED,
+            padding=(1, 2),
+        )
+    )
+
+
+def print_error(message: str) -> None:
+    console.print(
+        Panel(
+            message,
+            title=Text("Erro", style=STYLE_ERROR),
+            title_align="left",
+            border_style=STYLE_ERROR,
+            box=box.ROUNDED,
+        )
+    )
+
+def print_help() -> None:
+    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
+    table.add_column(style=f"{STYLE_ACCENT} bold")
+    table.add_column()
+    table.add_row("/help", "Mostra esta ajuda")
+    table.add_row("/history", "Mostra o histórico local")
+    table.add_row("/clear", "Limpa a conversa")
+    table.add_row("/tokens", "Mostra consumo de tokens")
+    table.add_row("/tools", "Lista as ferramentas disponíveis, por categoria")
+    table.add_row("/logs", "Alterna visibilidade dos logs(visivel por padrão)")
+    table.add_row("/tools <nome>", "Mostra a descrição completa de uma ferramenta")
+    table.add_row("/exit", "Encerra o programa")
+ 
+    console.print(Panel(table, title="Comandos", border_style=STYLE_ACCENT, box=box.ROUNDED))
+
+def print_tokens(client: GeminiClient) -> None:
+    summary = client.session_summary()
+
+    table = Table(box=box.SIMPLE_HEAVY, show_header=False)
+    table.add_column(style="bold")
+    table.add_column(justify="right", style=STYLE_ACCENT)
+
+    labels = {
+        "calls": "Chamadas de API",
+        "cache_hits": "Cache hits",
+        "input_tokens": "Tokens de entrada",
+        "output_tokens": "Tokens de saída",
+        "total_tokens": "Total de tokens",
+    }
+    for key, label in labels.items():
+        table.add_row(label, str(summary.get(key, 0)))
+
+    console.print(Panel(table, title="Consumo da sessão", border_style=STYLE_ACCENT, box=box.ROUNDED))
+
+def _short_description(full_description: str, max_chars: int = 80) -> str:
+    """Primeira frase da descrição (a mesma usada no TOOL_DEFINITIONS enviado
+    ao Gemini), cortada em max_chars. Evita duplicar texto — só resume."""
+    first_line = " ".join(full_description.split())  # colapsa espaços/quebras
+    first_sentence = first_line.split(". ")[0].rstrip(".")
+ 
+    if len(first_sentence) > max_chars:
+        return first_sentence[:max_chars].rstrip() + "..."
+    return first_sentence + "."
+
+def print_tools(tool_name: str | None = None) -> None:
+    definitions_by_name = {d["name"]: d for d in TOOL_DEFINITIONS}
+ 
+    # /tools <nome> — mostra a descrição completa de uma ferramenta específica
+    if tool_name:
+        definition = definitions_by_name.get(tool_name)
+        if not definition:
+            print_error(
+                f"Ferramenta '{tool_name}' não encontrada. "
+                f"Use /tools para ver a lista completa."
+            )
+            return
+ 
+        console.print(
+            Panel(
+                definition["description"].strip(),
+                title=Text(tool_name, style=f"{STYLE_ACCENT} bold"),
+                title_align="left",
+                border_style=STYLE_ACCENT,
+                box=box.ROUNDED,
+            )
+        )
+        return
+ 
+    # /tools — visão geral compacta, agrupada por categoria
+    categorized = {name for names in TOOL_CATEGORIES.values() for name in names}
+    uncategorized = [name for name in definitions_by_name if name not in categorized]
+ 
+    table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2), expand=True)
+    table.add_column(style=f"{STYLE_ACCENT} bold", no_wrap=True, ratio=1)
+    table.add_column(ratio=3)
+ 
+    groups = dict(TOOL_CATEGORIES)
+    if uncategorized:
+        groups["Outras"] = uncategorized
+ 
+    first_group = True
+    for category, names in groups.items():
+        if not first_group:
+            table.add_row("", "")
+        first_group = False
+ 
+        table.add_row(Text(category.upper(), style="bold underline"), "")
+ 
+        for name in names:
+            definition = definitions_by_name.get(name)
+            if not definition:
+                continue
+            table.add_row(f"  {name}", _short_description(definition["description"]))
+ 
+    console.print(
+        Panel(
+            table,
+            title="Ferramentas disponíveis",
+            subtitle="[dim]/tools <nome> para detalhes[/dim]",
+            border_style=STYLE_ACCENT,
+            box=box.ROUNDED,
+        )
+    )
+
+def toggle_logs() -> None:
+    gemini_logger = logging.getLogger(GEMINI_LOGGER_NAME)
+    currently_visible = gemini_logger.level <= LOG_LEVEL_VISIBLE
+ 
+    if currently_visible:
+        gemini_logger.setLevel(LOG_LEVEL_HIDDEN)
+        console.print(Panel("Logs ocultos. (Erros e avisos continuam aparecendo.)", style=STYLE_SYSTEM, box=box.ROUNDED))
+    else:
+        gemini_logger.setLevel(LOG_LEVEL_VISIBLE)
+        console.print(Panel("Logs visíveis.", style=STYLE_SYSTEM, box=box.ROUNDED))
+
+def print_history(chat: ChatSession) -> None:
+    history = chat.get_history()
+
+    if not history:
+        console.print(Panel("Histórico vazio.", style=STYLE_SYSTEM, box=box.ROUNDED))
+        return
+
+    for message in history:
+        if message.role == "user":
+            console.print(
+                Panel(
+                    message.text,
+                    title=Text("Você", style=STYLE_USER),
+                    title_align="left",
+                    border_style=STYLE_USER,
+                    box=box.ROUNDED,
+                )
+            )
+        else:
+            print_response(message.text)
+
 
 def handle_generated_files(files: list[Path]) -> None:
     """Pergunta ao usuário, para cada arquivo gerado nesta resposta (ex: gráficos),
@@ -118,41 +332,24 @@ def handle_generated_files(files: list[Path]) -> None:
         if not file_path.exists():
             continue
 
-        resposta = input(
-            f"\nSalvar o gráfico gerado ({file_path.name})? [s/N] "
-        ).strip().lower()
+        manter = Confirm.ask(
+            f"Salvar o gráfico gerado ([{STYLE_ACCENT}]{file_path.name}[/{STYLE_ACCENT}])?",
+            default=False,
+        )
 
-        if resposta == "s":
+        if manter:
             PLOTS_DIR.mkdir(parents=True, exist_ok=True)
             destino = PLOTS_DIR / file_path.name
             file_path.replace(destino)
-            print(f"Salvo em: {destino}")
+            console.print(f"[green]Salvo em:[/green] {destino}")
         else:
             try:
                 file_path.unlink()
             except OSError as e:
-                print(f"Não consegui remover o arquivo temporário {file_path}: {e}")
+                print_error(f"Não consegui remover o arquivo temporário {file_path}: {e}")
             else:
-                print("Descartado.")
+                console.print("[dim]Descartado.[/dim]")
 
-def print_help() -> None:
-    print("""
-Comandos:
-
-  /help       Mostra esta ajuda
-  /history    Mostra o histórico local
-  /clear      Limpa a conversa
-  /tokens     Mostra consumo de tokens
-  /exit       Encerra o programa
-    """)
-
-def print_history(chat: ChatSession) -> None:
-    for message in chat.get_history():
-        role = "Você" if message.role == "user" else "Gemini"
-
-        print(f"\n{role}:")
-        print(message.text)
-        console.print(Markdown(message.text))
 
 if __name__ == "__main__":
     main()
