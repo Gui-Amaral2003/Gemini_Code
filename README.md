@@ -246,7 +246,6 @@ print(response.text)
 │   ├── models.py               # Modelos de resposta e mensagens
 │   ├── config.py               # Configurações e caminhos padrão
 │   ├── cache.py                # Cache de prompts e respostas
-│   ├── retry.py                # Lógica de retry
 │   ├── model_routing.py        # Classificação de tools e roteamento de modelos
 │   └── ...
 ├── tools/

@@ -1,12 +1,13 @@
 
 from pathlib import Path
 from google.genai import errors as genai_errors
-
+import ssl
 
 RETRYABLE_ERRORS = (
     genai_errors.ServerError,
     ConnectionError,
     TimeoutError,
+    ssl.SSLError
 )
 
 DEFAULT_MODEL = "gemini-3.5-flash"
