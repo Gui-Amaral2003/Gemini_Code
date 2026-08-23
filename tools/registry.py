@@ -14,6 +14,14 @@ from .data_analysis import (
     plot_table_data,
 )
 from .pdf_reader import preview_pdf, read_pdf, search_in_pdf
+from .git_tool import (
+    git_status,
+    git_diff_unstaged,
+    git_diff_staged,
+    git_log,
+    git_show,
+    git_blame,
+)
 
 # Funções que o Python realmente pode executar.
 TOOLS = {
@@ -32,4 +40,10 @@ TOOLS = {
     'preview_pdf': preview_pdf,
     'read_pdf': read_pdf,
     'search_in_pdf': search_in_pdf,
+    'git_status': git_status,
+    'git_diff_unstaged': git_diff_unstaged,
+    'git_diff_staged': git_diff_staged,
+    'git_log': git_log,
+    'git_show': git_show,
+    'git_blame': git_blame,
 }

@@ -1,5 +1,6 @@
 from .database import TABELAS_PERMITIDAS
 from .plotting import VALID_CHART_TYPES
+from .git_tool import GIT_ALLOWED_REPOS
 
 # Descrição das ferramentas que será enviada ao Gemini.
 TOOL_DEFINITIONS = [
@@ -602,6 +603,157 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["path", "query"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "git_status",
+        "description": (
+            "Mostra os arquivos com mudanças staged, unstaged e não rastreados "
+            "(untracked) no repositório git. Use antes de git_diff_unstaged/"
+            "git_diff_staged para saber quais arquivos têm mudanças pendentes."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repositório pré-cadastrado.",
+                    "enum": list(GIT_ALLOWED_REPOS.keys()),
+                },
+            },
+            "required": ["repo"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "git_diff_unstaged",
+        "description": (
+            "Mostra o diff das mudanças no working directory que ainda NÃO foram "
+            "staged (git add). Use para 'o que eu mudei mas ainda não commitei'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repositório pré-cadastrado.",
+                    "enum": list(GIT_ALLOWED_REPOS.keys()),
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Restringe o diff a um arquivo específico. Se omitido, mostra todos os arquivos alterados.",
+                },
+            },
+            "required": ["repo"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "git_diff_staged",
+        "description": (
+            "Mostra o diff das mudanças que JÁ foram staged (git add) mas ainda "
+            "não foram commitadas."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repositório pré-cadastrado.",
+                    "enum": list(GIT_ALLOWED_REPOS.keys()),
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Restringe o diff a um arquivo específico. Se omitido, mostra todos os arquivos alterados.",
+                },
+            },
+            "required": ["repo"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "git_log",
+        "description": (
+            "Lista o histórico de commits (hash curto, autor, data, mensagem), "
+            "paginado com max_commits e skip. Use para descobrir qual commit "
+            "investigar antes de chamar git_show."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repositório pré-cadastrado.",
+                    "enum": list(GIT_ALLOWED_REPOS.keys()),
+                },
+                "max_commits": {
+                    "type": "integer",
+                    "description": "Máximo de commits a retornar. Padrão: 20.",
+                },
+                "skip": {
+                    "type": "integer",
+                    "description": "Quantos commits mais recentes pular (para paginar). Padrão: 0.",
+                },
+            },
+            "required": ["repo"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "git_show",
+        "description": (
+            "Mostra a mensagem completa e o diff introduzido por um commit "
+            "específico. Use commit_ref='HEAD' (padrão) para o último commit, "
+            "ou um hash/branch/HEAD~N para outro commit. Esta é a ferramenta "
+            "principal para 'o que o último commit adicionou'."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repositório pré-cadastrado.",
+                    "enum": list(GIT_ALLOWED_REPOS.keys()),
+                },
+                "commit_ref": {
+                    "type": "string",
+                    "description": "Referência do commit (hash, branch, HEAD, HEAD~1, etc). Padrão: HEAD.",
+                },
+            },
+            "required": ["repo"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "git_blame",
+        "description": (
+            "Mostra a autoria linha a linha de um arquivo (quem alterou cada "
+            "linha e em qual commit), opcionalmente restrita a um range de "
+            "linhas com start_line/end_line."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repositório pré-cadastrado.",
+                    "enum": list(GIT_ALLOWED_REPOS.keys()),
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Caminho do arquivo dentro do repositório, relativo à raiz.",
+                },
+                "start_line": {
+                    "type": "integer",
+                    "description": "Linha inicial (1-indexado), opcional.",
+                },
+                "end_line": {
+                    "type": "integer",
+                    "description": "Linha final (1-indexado), opcional.",
+                },
+            },
+            "required": ["repo", "path"],
         },
     },
 ]

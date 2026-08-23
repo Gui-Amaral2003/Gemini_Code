@@ -24,6 +24,10 @@ TERMINAL_TOOLS = {
     "plot_table_data",
     "search_in_pdf",
     "search_in_sheet",
+    "git_diff_unstaged",
+    "git_diff_staged",
+    "git_show",
+    "git_blame",
 }
  
 EXPLORATORY_TOOLS = {
@@ -36,6 +40,8 @@ EXPLORATORY_TOOLS = {
     "read_pdf",
     "create_file",
     'run_script' ##Interessante o modelo mais forte interpretar o script caso der erro
+    "git_status",
+    "git_log",
 }
 
 def all_terminal(tool_names: list[str]) -> bool:

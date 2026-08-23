@@ -260,6 +260,7 @@ print(response.text)
 │   ├── data_analysis.py        # Agregação e análise de dados em CSV/XLSX e tabelas
 │   ├── pdf_reader.py           # Preview, leitura e busca de texto em PDFs
 │   ├── plotting.py             # Renderização no terminal e geração de PNGs
+│   ├── git_tool.py              # Leitura de status, diffs, histórico e autoria Git
 │   └── registry.py              # Registro das ferramentas executáveis
 ├── old_gemini_client.py        # Implementação anterior, mantida para referência
 ├── gemini_terminal.py          # CLI interativa
@@ -421,6 +422,36 @@ print(png_path)
 O gráfico também é renderizado no terminal com `plotext`. O arquivo PNG é salvo
 temporariamente em `output/plots_staging/`; a aplicação que chamou o cliente é
 responsável por movê-lo ou removê-lo.
+
+### 9. Ferramentas Git
+
+O módulo `tools/git_tool.py` fornece ferramentas somente leitura para consultar
+repositórios Git locais:
+
+- `git_status`: mostra mudanças staged, unstaged e arquivos não rastreados
+- `git_diff_unstaged`: mostra mudanças ainda não adicionadas ao stage
+- `git_diff_staged`: mostra mudanças já adicionadas ao stage
+- `git_log`: lista o histórico de commits com paginação
+- `git_show`: mostra a mensagem e o diff de um commit
+- `git_blame`: mostra a autoria linha a linha de um arquivo
+
+Por segurança, as ferramentas aceitam somente nomes de repositórios definidos em
+`GIT_ALLOWED_REPOS`; não executam comandos de escrita e não recebem flags livres
+do modelo. Caminhos de arquivos são validados para permanecerem dentro do
+repositório permitido, e a saída é limitada a 10.000 caracteres.
+
+O repositório deste projeto já vem cadastrado com o nome `gemini_code`:
+
+```python
+from tools import git_diff_unstaged, git_log, git_status
+
+print(git_status("gemini_code"))
+print(git_diff_unstaged("gemini_code", path="README.md"))
+print(git_log("gemini_code", max_commits=5))
+```
+
+Para adicionar outro repositório, inclua seu nome e caminho em `GIT_ALLOWED_REPOS`
+no arquivo `tools/git_tool.py`.
 
 ---
 

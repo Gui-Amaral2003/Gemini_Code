@@ -8,6 +8,7 @@
 ##TODO: 8. Limpeza de arquivos
 ##TODO: 9. Prosseguir com a criação dos tests
 ##TODO 10. Testar economia gerada pelo model_routing
+##TODO 11. Permitir escrita no modulo git, não apenas leitura
 from pathlib import Path
 import logging
 from gemini import GeminiClient, ChatSession
@@ -41,6 +42,7 @@ TOOL_CATEGORIES = {
     "Análise de dados": ["analyze_sheet_data", "analyze_table_data"],
     "Gráficos": ["plot_sheet_data", "plot_table_data"],
     "PDF": ["preview_pdf", "read_pdf", "search_in_pdf"],
+    "Git": ["git_status", "git_diff_unstaged", "git_diff_staged", "git_log", "git_show", "git_blame"],
 }
 
 ##Config de log, utilizar a *_VISIBLE para debug e *_HIDDEN para produção, assim conseguimos ver os erros/avisos mesmo com log oculto
