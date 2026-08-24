@@ -83,7 +83,7 @@ TOOL_CATEGORIES = {
     "Arquivos e scripts": ["read_file", "create_file", "run_script"],
     "Banco de dados": ["query_table"],
     "Planilhas": ["list_sheets", "preview_sheet", "read_sheet", "search_in_sheet"],
-    "Análise de dados": ["analyze_sheet_data", "analyze_table_data"],
+    "Análise de dados": ["analyze_sheet_data", "analyze_table_data", 'describe_sheet_column', 'describe_table_column'],
     "Gráficos": ["plot_sheet_data", "plot_table_data"],
     "PDF": ["preview_pdf", "read_pdf", "search_in_pdf"],
     "Git": ["git_status", "git_diff_unstaged", "git_diff_staged", "git_log", "git_show", "git_blame"],
@@ -253,7 +253,7 @@ def print_help() -> None:
     conteudo = Columns([build_sparkle(), table], padding=(0, 4), equal=False, expand=False)
 
     console.print(Panel(conteudo, title="Comandos", border_style=STYLE_ACCENT, box=box.ROUNDED))
-    
+
 def print_tokens(client: GeminiClient) -> None:
     summary = client.session_summary()
 

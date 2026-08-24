@@ -12,6 +12,7 @@ from .plotting import render_and_save, VALID_CHART_TYPES
 
 _VALID_OPERATIONS = {'sum', 'mean', 'count', 'min', 'max', 'nunique', 'median', 'std'}
 SPREADSHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
+TOP_VALUES_LIMIT = 5
 
 def _infer_column_types(df: pd.DataFrame) -> dict[str, str]:
     tipos = {}
@@ -55,6 +56,79 @@ def _apply_conditions(df: pd.DataFrame, conditions: list[dict], column_types: di
             padrao = valor.strip('%')
             mask &= serie.astype(str).str.contains(padrao, case = False, na = False)
     return df[mask]
+
+def _describe_numeric_or_date(serie: pd.Series, tipo: str) -> str:
+    total = len(serie)
+    nulls = int(serie.isna().sum())
+
+    if tipo == 'date':
+        return (
+            f"Tipo: date\n"
+            f"Total de linhas: {total}\n"
+            f"Nulos: {nulls}\n"
+            f"Mínimo: {serie.min()}\n"
+            f"Máximo: {serie.max()}"
+        )
+
+    # int/float
+    return (
+        f"Tipo: {tipo}\n"
+        f"Total de linhas: {total}\n"
+        f"Nulos: {nulls}\n"
+        f"Mínimo: {serie.min()}\n"
+        f"Máximo: {serie.max()}\n"
+        f"Média: {serie.mean()}\n"
+        f"Mediana: {serie.median()}\n"
+        f"Desvio padrão: {serie.std()}"
+    )
+
+def _describe_string(serie: pd.Series) -> str:
+    total = len(serie)
+    nulls = int(serie.isna().sum())
+    nunique = serie.nunique(dropna=True)
+
+    top_values = serie.value_counts().head(TOP_VALUES_LIMIT)
+    linhas_top = "\n".join(f"  - {valor}: {contagem}" for valor, contagem in top_values.items())
+
+    return (
+        f"Tipo: str\n"
+        f"Total de linhas: {total}\n"
+        f"Nulos: {nulls}\n"
+        f"Valores únicos: {nunique}\n"
+        f"Top {TOP_VALUES_LIMIT} valores mais frequentes:\n{linhas_top}"
+    )
+
+def _describe_column(df: pd.DataFrame, column: str, conditions: list[dict] | None = None) -> str:
+    """
+    Núcleo compartilhado por describe_sheet_column/describe_table_column.
+    conditions: mesmo contrato de _analyze_data — use None quando o filtro já
+    tiver sido aplicado antes (ex: tabelas do banco, filtradas no SQL por
+    fetch_table_dataframe).
+    """
+    if column not in df.columns:
+        return (
+            f"Coluna não encontrada: {column}. "
+            f"Disponíveis: {list(df.columns)}"
+        )
+
+    column_types = _infer_column_types(df)
+
+    try:
+        if conditions:
+            df = _apply_conditions(df, conditions, column_types)
+    except QueryValidationError as e:
+        return f"Filtro inválido: {e}"
+
+    if df.empty:
+        return "Nenhum dado encontrado após aplicar o filtro"
+
+    serie = df[column]
+    tipo = column_types[column]
+
+    if tipo == 'str':
+        return _describe_string(serie)
+    
+    return _describe_numeric_or_date(serie, tipo)
 
 def _compute_aggregation(
     df: pd.DataFrame,
@@ -213,7 +287,33 @@ def _load_sheet_dataframe(file_path: str, sheet_name: str | None) -> tuple[pd.Da
 # --------------------------------------------------------------------------- #
 # Tools expostas ao Gemini — análise (retornam texto)
 # --------------------------------------------------------------------------- #
+
+def describe_sheet_column(file_path: str, column: str, sheet_name: str | None = None, conditions: list[dict] | None = None) -> str:
+    """
+    Carrega uma planilha (.xlsx/.csv) e retorna estatísticas descritivas de
+    uma única coluna (min/max/média/desvio para numéricas e datas; top
+    valores mais frequentes para texto). Use antes de analyze_sheet_data
+    para entender a coluna e decidir operation/group_by.
+    """
+    df, error = _load_sheet_dataframe(file_path, sheet_name)
+    if error:
+        return error
  
+    return _describe_column(df, column, conditions)
+
+def describe_table_column(table: str, column: str, conditions: list[dict] | None = None) -> str:
+    """
+    Carrega uma tabela pré-cadastrada (filtro aplicado no SQL via
+    fetch_table_dataframe) e retorna estatísticas descritivas de uma única
+    coluna. Use antes de analyze_table_data para entender a coluna e
+    decidir operation/group_by.
+    """
+    df, error = fetch_table_dataframe(table, conditions)
+    if error:
+        return error
+
+    return _describe_column(df, column, conditions=None)
+
 def analyze_sheet_data(file_path: str, sheet_name: str | None = None, operation: str = "sum", target_column: str | None = None, group_by: str | None = None, conditions: list[dict] | None = None, top_n: int | None = None, sort_ascending: bool = False) -> str:
     """
     Carrega uma planilha (.xlsx/.csv) e executa uma análise agregada sobre ela.

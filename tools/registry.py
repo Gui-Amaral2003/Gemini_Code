@@ -12,6 +12,8 @@ from .data_analysis import (
     analyze_table_data,
     plot_sheet_data,
     plot_table_data,
+    describe_sheet_column,
+    describe_table_column
 )
 from .pdf_reader import preview_pdf, read_pdf, search_in_pdf
 from .git_tool import (
@@ -37,6 +39,8 @@ TOOLS = {
     'analyze_table_data': analyze_table_data,
     'plot_sheet_data': plot_sheet_data,
     'plot_table_data': plot_table_data,
+    'describe_sheet_column': describe_sheet_column,
+    'describe_table_column': describe_table_column,
     'preview_pdf': preview_pdf,
     'read_pdf': read_pdf,
     'search_in_pdf': search_in_pdf,

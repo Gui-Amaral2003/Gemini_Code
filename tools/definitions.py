@@ -530,6 +530,105 @@ TOOL_DEFINITIONS = [
     },
     {
         "type": "function",
+        "name": "describe_sheet_column",
+        "description": (
+            "Retorna estatísticas descritivas de uma única coluna de uma planilha "
+            "(.xlsx ou .csv): min, máximo, média, mediana e desvio padrão para "
+            "colunas numéricas; min/máximo para datas; valores únicos e os "
+            f"5 valores mais frequentes para colunas de texto. "
+            "Use antes de analyze_sheet_data ou plot_sheet_data para entender a "
+            "coluna e escolher operation/group_by corretamente."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": (
+                        "Nome do arquivo de planilha (.xlsx ou .csv) ou caminho completo. "
+                        "Se apenas o nome for informado, o arquivo é localizado automaticamente."
+                    ),
+                },
+                "column": {
+                    "type": "string",
+                    "description": "Nome da coluna a descrever.",
+                },
+                "sheet_name": {
+                    "type": "string",
+                    "description": "Nome da aba, se aplicável (apenas para .xlsx). Se omitido, usa a primeira aba.",
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Lista de condições de filtro aplicadas antes de calcular as estatísticas.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação. LIKE apenas para colunas de texto.",
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Valor de comparação (convertido para o tipo real da coluna).",
+                            },
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+            },
+            "required": ["file_path", "column"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "describe_table_column",
+        "description": (
+            "Retorna estatísticas descritivas de uma única coluna de uma tabela "
+            "pré-cadastrada do banco SQL Server: min, máximo, média, mediana e "
+            "desvio padrão para colunas numéricas; min/máximo para datas; valores "
+            "únicos e os valores mais frequentes para colunas de texto. Use antes "
+            "de analyze_table_data ou plot_table_data para entender a coluna e "
+            "escolher operation/group_by corretamente."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "description": "Nome da tabela pré-cadastrada (ver TABELAS_PERMITIDAS).",
+                },
+                "column": {
+                    "type": "string",
+                    "description": "Nome da coluna a descrever.",
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Lista de condições de filtro aplicadas antes de calcular as estatísticas.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação. LIKE apenas para colunas de texto.",
+                            },
+                            "value": {
+                                "type": "string",
+                                "description": "Valor de comparação (convertido para o tipo real da coluna).",
+                            },
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+            },
+            "required": ["table", "column"],
+        },
+    },
+    {
+        "type": "function",
         "name": "preview_pdf",
         "description": (
             "Mostra o número de páginas, metadados básicos (título/autor) e um preview "
