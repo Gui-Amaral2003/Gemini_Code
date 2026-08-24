@@ -1,2 +1,0 @@
-Olá Gemini!
-Este arquivo foi lido através de uma ferramenta Python.
