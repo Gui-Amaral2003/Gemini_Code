@@ -20,12 +20,56 @@ from rich.prompt import Prompt, Confirm
 from rich.status import Status
 from rich.table import Table
 from rich.text import Text
+from rich.columns import Columns
+from rich.align import Align
 from rich import box
 
 SESSION_ID = 'teste'
 PLOTS_DIR = Path("output") / "plots"
 
-## paleta central — mude aqui pra afetar o app inteiro
+# Gradiente clássico do ícone do Gemini (azul -> roxo -> rosa)
+GEMINI_BLUE = (66, 133, 244)     # #4285F4
+GEMINI_PURPLE = (145, 104, 192)  # #9168C0
+GEMINI_PINK = (217, 101, 112)    # #D96570
+
+
+def _lerp_color(c1: tuple, c2: tuple, t: float) -> tuple:
+    return tuple(int(c1[i] + (c2[i] - c1[i]) * t) for i in range(3))
+
+
+def _gemini_gradient(t: float) -> str:
+    """t entre 0 e 1 -> hex interpolado ao longo do gradiente azul -> roxo -> rosa."""
+    if t < 0.5:
+        rgb = _lerp_color(GEMINI_BLUE, GEMINI_PURPLE, t / 0.5)
+    else:
+        rgb = _lerp_color(GEMINI_PURPLE, GEMINI_PINK, (t - 0.5) / 0.5)
+    return "#{:02x}{:02x}{:02x}".format(*rgb)
+
+
+def build_sparkle(size: int = 13) -> Text:
+    """
+    Desenha o 'sparkle' do Gemini em blocos, com gradiente diagonal
+    (azul no canto superior esquerdo -> rosa no canto inferior direito)
+    e um rostinho simples (olhos + boca) recortado no meio.
+    """
+    center = size // 2
+    eyes = {(center - 2, center - 2), (center - 2, center + 2)}
+    mouth = {(center + 2, c) for c in range(center - 1, center + 2)}
+
+    art = Text()
+    for r in range(size):
+        for c in range(size):
+            d = abs(r - center) + abs(c - center)
+            filled = d <= center
+
+            if not filled or (r, c) in eyes or (r, c) in mouth:
+                art.append("  ")
+                continue
+
+            t = (r + c) / (2 * (size - 1))
+            art.append("██", style=_gemini_gradient(t))
+        art.append("\n")
+    return art
 STYLE_USER = "bold cyan"
 STYLE_GEMINI = "bold magenta"
 STYLE_SYSTEM = "dim"
@@ -149,6 +193,8 @@ def main():
 # --------------------------------------------------------------------------- #
 
 def print_banner() -> None:
+    console.print(Align.center(build_sparkle()))
+
     title = Text("Gemini Terminal", style=f"{STYLE_ACCENT} bold")
     body = Text.from_markup(
         f"Sessão ativa: [{STYLE_ACCENT}]{SESSION_ID}[/{STYLE_ACCENT}]\n\n"
@@ -162,9 +208,10 @@ def print_banner() -> None:
         "  [cyan]/exit[/cyan]     sair"
     )
     console.print(
-        Panel(body, title=title, border_style=STYLE_ACCENT, box=box.ROUNDED, padding=(1, 2))
+        Align.center(
+            Panel(body, title=title, border_style=STYLE_ACCENT, box=box.ROUNDED, padding=(1, 2))
+        )
     )
-
 
 def print_response(text: str) -> None:
     console.print(
@@ -199,12 +246,14 @@ def print_help() -> None:
     table.add_row("/clear", "Limpa a conversa")
     table.add_row("/tokens", "Mostra consumo de tokens")
     table.add_row("/tools", "Lista as ferramentas disponíveis, por categoria")
-    table.add_row("/logs", "Alterna visibilidade dos logs(visivel por padrão)")
+    table.add_row("/logs", "Alterna visibilidade dos logs (visível por padrão)")
     table.add_row("/tools <nome>", "Mostra a descrição completa de uma ferramenta")
     table.add_row("/exit", "Encerra o programa")
- 
-    console.print(Panel(table, title="Comandos", border_style=STYLE_ACCENT, box=box.ROUNDED))
 
+    conteudo = Columns([build_sparkle(), table], padding=(0, 4), equal=False, expand=False)
+
+    console.print(Panel(conteudo, title="Comandos", border_style=STYLE_ACCENT, box=box.ROUNDED))
+    
 def print_tokens(client: GeminiClient) -> None:
     summary = client.session_summary()
 
