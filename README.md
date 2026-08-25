@@ -41,10 +41,10 @@ cd gemini
 pip install -r requirements.txt
 ```
 
-Ou manualmente:
+Equivalente à instalação pelo arquivo de requisitos:
 
 ```bash
-pip install google-genai rich python-dotenv sqlalchemy pandas openpyxl tabulate pyyaml pyodbc
+pip install google-genai rich python-dotenv sqlalchemy pyyaml pyodbc pandas tabulate openpyxl pypdf matplotlib plotext
 ```
 
 ### 3. Configure a API Key
@@ -117,10 +117,14 @@ python gemini_terminal.py
 ```
 
 Comandos disponíveis:
-- `/help` - mostra ajuda
-- `/history` - mostra histórico da sessão
-- `/clear` - limpa o contexto
-- `/tokens` - mostra consumo de tokens
+- `/help` - mostra a ajuda completa
+- `/history` - mostra o histórico local da sessão
+- `/clear` - limpa o contexto e desvincula a conversa anterior
+- `/tools` - lista as ferramentas por categoria
+- `/tools <nome>` - mostra a descrição detalhada de uma ferramenta
+- `/think` - liga ou desliga a exibição dos resumos de pensamento
+- `/logs` - alterna a visibilidade dos logs
+- `/tokens` - mostra o consumo de tokens da sessão
 - `/exit` - sai do terminal
 
 ### Usando ferramentas
@@ -247,7 +251,9 @@ print(response.text)
 │   ├── config.py               # Configurações e caminhos padrão
 │   ├── cache.py                # Cache de prompts e respostas
 │   ├── model_routing.py        # Classificação de tools e roteamento de modelos
-│   └── ...
+│   ├── chat_sessions.json      # Histórico persistente das sessões
+│   ├── gemini_cache.json       # Cache local de respostas
+│   └── gemini_usage_log.jsonl  # Log local de uso da API
 ├── tools/
 │   ├── __init__.py
 │   ├── definitions.py
@@ -260,7 +266,9 @@ print(response.text)
 │   ├── pdf_reader.py           # Preview, leitura e busca de texto em PDFs
 │   ├── plotting.py             # Renderização no terminal e geração de PNGs
 │   ├── git_tool.py              # Leitura de status, diffs, histórico e autoria Git
-│   └── registry.py              # Registro das ferramentas executáveis
+│   ├── registry.py              # Registro das ferramentas executáveis
+│   ├── validation.py            # Validação de identificadores e filtros
+│   └── write_operations.py      # Operações de escrita com confirmação
 ├── old_gemini_client.py        # Implementação anterior, mantida para referência
 ├── gemini_terminal.py          # CLI interativa
 ├── process.yaml                # Definição de processos reutilizáveis
@@ -269,8 +277,17 @@ print(response.text)
 ├── LICENSE
 ├── TODO.md
 ├── examples/
-├── tests/
-└── ...
+│   └── SampleSuperstore.csv
+├── output/                      # Scripts e gráficos gerados
+│   ├── analise_contratos.py
+│   ├── calculo.py
+│   ├── delete_deal.py
+│   ├── fix_database_indentation.py
+│   ├── listar_arquivos.py
+│   ├── read_deal.py
+│   ├── plots/
+│   └── plots_staging/
+└── tests/                       # Testes automatizados
 ```
 
 ## 🛠️ Ferramentas Disponíveis
@@ -294,7 +311,7 @@ sem diretórios ou caminhos, e permite as extensões `.py`, `.txt`, `.md`, `.csv
 confirmação antes de sobrescrevê-lo.
 
 ```python
-from tools import create_file
+from tools.filesystem import create_file
 
 result = create_file(
     filename="analise.py",
@@ -308,13 +325,13 @@ O retorno indica sucesso ou erro e, quando criado, informa o caminho em
 
 ### 3. `run_script`
 
-Executa um script Python após confirmação explícita do usuário. O caminho pode ser
-o arquivo criado por `create_file` ou outro arquivo `.py` existente. A execução usa
-o mesmo interpretador Python do cliente, não usa `shell`, e é interrompida após 30
-segundos.
+Executa um script Python após confirmação explícita do usuário. Por segurança, o
+cliente só permite executar scripts criados na sessão atual pela ferramenta
+`create_file`. A execução usa o mesmo interpretador Python do cliente, não usa
+`shell`, e é interrompida após 30 segundos.
 
 ```python
-from tools import run_script
+from tools.script_runner import run_script
 
 result = run_script("output/analise.py")
 print(result["message"])
@@ -336,7 +353,7 @@ Executa consultas SELECT em tabelas pré-cadastradas do banco de dados (atualmen
 
 **Exemplo:**
 ```python
-from tools import query_table
+from tools.database import query_table
 
 result = query_table(
     table="TEST_DOA_DEALS",
@@ -347,6 +364,12 @@ result = query_table(
 )
 print(result)
 ```
+
+`query_table` é somente leitura. Alterações usam as ferramentas separadas
+`update_table` (UPDATE) e `delete_table_rows` (DELETE), sempre com filtro
+obrigatório e confirmação explícita. Inserção de linhas (INSERT) ainda não é
+suportada. A tabela permitida atualmente é `rsk.TEST_DOA_DEALS`; a conexão vem
+de `DB_CONN_STRING`.
 
 ### 5. `analyze_sheet_data`
 
@@ -422,7 +445,13 @@ O gráfico também é renderizado no terminal com `plotext`. O arquivo PNG é sa
 temporariamente em `output/plots_staging/`; a aplicação que chamou o cliente é
 responsável por movê-lo ou removê-lo.
 
-### 9. Ferramentas Git
+### 9. `describe_sheet_column` e `describe_table_column`
+
+Descrevem uma coluna de planilha ou tabela, incluindo informações úteis como tipo,
+valores ausentes e estatísticas básicas. São ferramentas auxiliares para entender
+os dados antes de analisá-los.
+
+### 10. Ferramentas Git
 
 O módulo `tools/git_tool.py` fornece ferramentas somente leitura para consultar
 repositórios Git locais:
@@ -442,7 +471,7 @@ repositório permitido, e a saída é limitada a 10.000 caracteres.
 O repositório deste projeto já vem cadastrado com o nome `gemini_code`:
 
 ```python
-from tools import git_diff_unstaged, git_log, git_status
+from tools.git_tool import git_diff_unstaged, git_log, git_status
 
 print(git_status("gemini_code"))
 print(git_diff_unstaged("gemini_code", path="README.md"))
@@ -498,6 +527,11 @@ no arquivo `tools/git_tool.py`.
 ```
 
 ## 📊 Logging e Monitoramento
+
+O cliente grava o uso acumulado em `gemini/gemini_usage_log.jsonl` e mantém o
+cache de respostas em `gemini/gemini_cache.json`. Sessões que recebem um
+`session_id` são persistidas em `gemini/chat_sessions.json`. Esses arquivos são
+locais e podem conter histórico ou metadados de uso.
 
 ### Verificar uso de tokens
 
