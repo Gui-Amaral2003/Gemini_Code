@@ -6,7 +6,7 @@ import logging
 import random
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
 from google import genai
 from google.genai import errors as genai_errors
@@ -76,6 +76,8 @@ class GeminiClient:
         self.usage_log_path = Path(usage_log_path)
         self.max_retries = max_retries
         self.cache = PromptCache(cache_path) if use_cache else None
+        self._thought_callback: Optional[Callable[[str], None]] = None
+        self.show_thoughts: bool = False
 
         self._session_input_tokens = 0
         self._session_output_tokens = 0
@@ -85,6 +87,34 @@ class GeminiClient:
         # Reiniciado a cada generate() — arquivos gerados por tools nesta chamada.
         self._current_generated_files: list[Path] = []
         self._created_files_this_session: set[Path] = set()
+
+    def _process_thoughts(self, interaction) -> list[str]:
+        """
+        Extrai os thought summaries de uma interação (steps do tipo 'thought')
+        e notifica o callback registrado, se houver. Retorna os textos capturados
+        NESTA interação — quem chama é responsável por acumular entre rodadas.
+        """
+        thoughts = []
+
+        for step in interaction.steps:
+            if getattr(step, 'type', None) != 'thought':
+                continue
+
+            summary_blocks = getattr(step, 'summary', None) or []
+            texts = [
+                block.text
+                for block in summary_blocks
+                if getattr(block, "type", None) == "text" and getattr(block, "text", None)
+            ]
+
+            if not texts:
+                continue
+
+            thought_text = "\n".join(texts)
+            thoughts.append(thought_text)
+            if self._thought_callback:
+                self._thought_callback(thought_text)
+        return thoughts
 
     def _get_function_calls(self, interaction) -> list:
         """Retorna todas as chamadas de ferramentas presentes na interação."""
@@ -250,6 +280,22 @@ class GeminiClient:
             "Todos os modelos configurados atingiram o limite de uso."
         ) from last_error
 
+    def set_thought_callback(self, callback: Callable[[str], None]) -> None:
+        """
+        Registra um callback chamado a cada thought summary capturado durante
+        generate(). Existe para permitir que a UI (ex: gemini_terminal.py) exiba o
+        raciocínio do modelo em tempo real, sem acoplar esta camada a nenhuma
+        biblioteca de terminal (mesmo padrão de confirm_action/set_confirm_callback).
+        """
+        self._thought_callback = callback
+
+    def set_thinking_enabled(self, enabled: bool) -> None:
+        """
+        Liga/desliga o pedido de thought summaries nas próximas chamadas de 
+        generate(). Desligado por padrão — aumenta latência e custo de tokens.
+        """
+        self.show_thoughts = enabled
+
     def count_tokens(self, prompt: str, model: Optional[str] = None) -> int:
         """Conta o número de tokens que seriam usados para gerar uma resposta."""
         model = model or self.default_model
@@ -310,6 +356,8 @@ class GeminiClient:
             generation_config["max_output_tokens"] = max_output_tokens
         if temperature is not None:
             generation_config["temperature"] = temperature
+        if self.show_thoughts:
+            generation_config["thinking_summaries"] = "auto"
 
         attempt = 0
         while True:
@@ -321,6 +369,7 @@ class GeminiClient:
                 accumulated_output_tokens = 0
                 accumulated_total_tokens = 0
                 api_calls_made = 0
+                accumulated_thoughts: list[str] = []
 
                 def _accumulate_usage(interaction) -> None:
                     nonlocal accumulated_input_tokens, accumulated_output_tokens
@@ -340,6 +389,7 @@ class GeminiClient:
                     generation_config=generation_config or None,
                 )
                 _accumulate_usage(interaction)
+                accumulated_thoughts.extend(self._process_thoughts(interaction))
 
                 while True:
                     function_calls = self._get_function_calls(interaction)
@@ -388,7 +438,7 @@ class GeminiClient:
                         system_instruction=system,
                     )
                     _accumulate_usage(interaction)
-
+                    accumulated_thoughts.extend(self._process_thoughts(interaction))
                     # Rede de segurança: o modelo barato foi chamado pra sintetizar, mas pediu mais ferramentas em vez disso — a decisão de qual tool chamar não é confiável nesse modelo, então descarta essa resposta e refaz a MESMA rodada com o modelo forte, a partir do mesmo ponto da conversa (prior_interaction_id).
                     if used_cheap_model and self._get_function_calls(interaction):
                         logger.info(
@@ -404,16 +454,18 @@ class GeminiClient:
                             system_instruction=system,
                         )
                         _accumulate_usage(interaction)
+                        accumulated_thoughts.extend(self._process_thoughts(interaction))
 
                 response = self._to_response(
-                    interaction,
-                    current_model,
-                    process_name,
+                    interaction=interaction,
+                    model=current_model,
+                    process_name=process_name,
                     input_tokens=accumulated_input_tokens,
                     output_tokens=accumulated_output_tokens,
                     total_tokens=accumulated_total_tokens,
                     api_calls=api_calls_made,
                     generated_files=list(self._current_generated_files),
+                    thoughts=accumulated_thoughts,
                 )
 
                 self._log_usage(response)
@@ -463,6 +515,7 @@ class GeminiClient:
         total_tokens: int,
         api_calls: int = 1,
         generated_files: Optional[list[Path]] = None,
+        thoughts: Optional[list[str]] = None,
     ) -> GeminiResponse:
         return GeminiResponse(
             text=interaction.output_text,
@@ -474,6 +527,7 @@ class GeminiClient:
             process_name=process_name,
             api_calls=api_calls,
             generated_files=generated_files or [],
+            thoughts=thoughts or [],
             raw=interaction,
         )
 

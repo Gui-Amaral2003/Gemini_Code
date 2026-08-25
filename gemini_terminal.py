@@ -76,6 +76,7 @@ STYLE_GEMINI = "bold magenta"
 STYLE_SYSTEM = "dim"
 STYLE_ERROR = "bold red"
 STYLE_ACCENT = "bright_yellow"
+STYLE_THOUGHT = "dim italic"
 
 console = Console()
 
@@ -99,6 +100,7 @@ LOG_LEVEL_HIDDEN = logging.WARNING  # erros/avisos continuam aparecendo mesmo "o
 def main():
     logging.getLogger(GEMINI_LOGGER_NAME).setLevel(LOG_LEVEL_VISIBLE)
     client = GeminiClient(cheap_model = 'gemini-3.5-flash-lite')
+    client.set_thought_callback(make_thought_callback())
 
     chat = ChatSession(
         client = client,
@@ -182,6 +184,10 @@ def main():
                 print_tools(arg or None)
                 continue
 
+            if user_input == "/think":
+                toggle_thinking(client)
+                continue
+
             if user_input == "/tokens":
                 print_tokens(client)
                 continue
@@ -227,6 +233,7 @@ def print_banner() -> None:
         "  [cyan]/history[/cyan]  mostra o histórico\n"
         "  [cyan]/clear[/cyan]    limpa o contexto\n"
         "  [cyan]/tools[/cyan]    mostra as ferramentas, /tools <nome> para detalhes\n"
+        "  [cyan]/think[/cyan]    liga/desliga a exibição do raciocínio do Gemini\n"
         "  [cyan]/logs[/cyan]     alterna visibilidade dos logs\n"
         "  [cyan]/tokens[/cyan]   mostra consumo\n"
         "  [cyan]/exit[/cyan]     sair"
@@ -270,6 +277,7 @@ def print_help() -> None:
     table.add_row("/clear", "Limpa a conversa")
     table.add_row("/tokens", "Mostra consumo de tokens")
     table.add_row("/tools", "Lista as ferramentas disponíveis, por categoria")
+    table.add_row("/think", "Liga/desliga a exibição do raciocínio do Gemini")
     table.add_row("/logs", "Alterna visibilidade dos logs (visível por padrão)")
     table.add_row("/tools <nome>", "Mostra a descrição completa de uma ferramenta")
     table.add_row("/exit", "Encerra o programa")
@@ -367,6 +375,23 @@ def print_tools(tool_name: str | None = None) -> None:
         )
     )
 
+def toggle_thinking(client: GeminiClient) -> None:
+    novo_estado = not client.show_thoughts
+    client.set_thinking_enabled(novo_estado)
+
+    if novo_estado:
+        console.print(
+            Panel(
+                "Thinking summaries ativado. O raciocínio do Gemini será exibido "
+                "em cinza durante o processamento. Isso aumenta latência e custo "
+                "de tokens.",
+                style=STYLE_SYSTEM,
+                box=box.ROUNDED,
+            )
+        )
+    else:
+        console.print(Panel("Thinking summaries desativado.", style=STYLE_SYSTEM, box=box.ROUNDED))
+
 def toggle_logs() -> None:
     gemini_logger = logging.getLogger(GEMINI_LOGGER_NAME)
     currently_visible = gemini_logger.level <= LOG_LEVEL_VISIBLE
@@ -432,6 +457,15 @@ def make_confirm_typed_callback(status: Status):
         finally:
             status.start()
     return _confirm_typed
+
+def make_thought_callback():
+    """
+    Callback registrado no GeminiClient para exibir thought summaries em
+    tempo real, conforme chegam — sem acoplar o lib layer ao rich.
+    """
+    def _on_thought(text: str) -> None:
+        console.print(f"[{STYLE_THOUGHT}]💭 {text}[/{STYLE_THOUGHT}]")
+    return _on_thought
 
 def handle_generated_files(files: list[Path]) -> None:
     """Pergunta ao usuário, para cada arquivo gerado nesta resposta (ex: gráficos),

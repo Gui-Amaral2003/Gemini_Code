@@ -15,6 +15,8 @@ class GeminiResponse:
     api_calls: int = 1
     # Arquivos gerados por tools durante essa chamada (ex: PNGs de plot_sheet_data/plot_table_data), ainda em staging — cabe a quem consome (ex: gemini_terminal.py) decidir se mantém ou descarta.
     generated_files: list[Path] = field(default_factory=list)
+    # Pensamentos do modelo durante a geração da resposta.
+    thoughts: list[str] = field(default_factory = list)
     raw: object = field(default=None, repr=False)
 
 @dataclass
