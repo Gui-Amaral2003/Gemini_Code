@@ -19,9 +19,10 @@ TABELAS_PERMITIDAS = {
             'Contract_Type': 'str',
             'Supply_Start': 'date',
             'Supply_End': 'date',
-            'Company': 'str'
+            'Company': 'str',
+            'Deal_Date': 'date'
         },
-        "colunas_retorno": ["ID", "WBC_TERM", "CTG_SUBMITTER", "Counterpart_CNPJ", "Contract_Type", "Supply_Start", "Supply_End", "Company"],
+        "colunas_retorno": ["ID", "WBC_TERM", "CTG_SUBMITTER", "Counterpart_CNPJ", "Contract_Type", "Supply_Start", "Supply_End", "Company", 'Deal_Date'],
     }
 }
 

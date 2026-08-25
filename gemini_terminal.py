@@ -13,6 +13,7 @@ from pathlib import Path
 import logging
 from gemini import GeminiClient, ChatSession
 from tools.definitions import TOOL_DEFINITIONS
+from tools.confirmation import set_confirm_callback, set_confirm_typed_callback
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -130,6 +131,23 @@ def main():
         para ver, gerar ou visualizar um gráfico/plot. Se o usuário só pediu um número, uma
         soma, uma média ou uma tabela, use analyze_sheet_data/analyze_table_data — NUNCA
         chame as ferramentas de plot nesse caso.
+
+        REGRA CRÍTICA sobre alteração de dados no banco:
+        query_table é SOMENTE LEITURA. Não existe, hoje, nenhuma ferramenta para
+        INSERT, UPDATE ou DELETE em tabelas do banco de dados.
+
+        É TERMINANTEMENTE PROIBIDO usar create_file + run_script (ou qualquer outra
+        combinação de ferramentas) para escrever, gerar ou executar código que
+        modifique dados em uma tabela do banco — isso inclui DELETE, UPDATE, INSERT,
+        TRUNCATE, DROP, ALTER, ou qualquer statement SQL que não seja SELECT.
+        create_file e run_script existem para tarefas de apoio (ex: pequenos scripts
+        de análise, automações locais), nunca como caminho alternativo para modificar
+        dados quando a ferramenta apropriada não existe.
+
+        Se o usuário pedir para apagar, atualizar ou inserir uma linha/registro em uma
+        tabela do banco, explique que essa ferramenta ainda não está disponível e
+        NÃO tente contornar essa limitação de nenhuma forma. Não gere o script, não
+        proponha o script, apenas informe a limitação.
         """
     )
 
@@ -172,8 +190,14 @@ def main():
                 toggle_logs()
                 continue
 
-            with Status("[dim]Gemini está pensando...[/dim]", console=console, spinner="dots"):
-                response = chat.send(user_input)
+            with Status("[dim]Gemini está pensando...[/dim]", console=console, spinner="dots") as status:
+                set_confirm_callback(make_confirm_callback(status))
+                set_confirm_typed_callback(make_confirm_typed_callback(status))
+                try:
+                    response = chat.send(user_input)
+                finally:
+                    set_confirm_callback(None)
+                    set_confirm_typed_callback(None)
 
             print_response(response.text)
 
@@ -375,6 +399,39 @@ def print_history(chat: ChatSession) -> None:
         else:
             print_response(message.text)
 
+def make_confirm_callback(status: Status):
+    """
+    Cria um callback de confirmação que pausa o spinner antes de perguntar
+    e retoma depois — evita que o prompt s/N fique escondido pela repintura
+    do Status.
+    """
+    def _confirm(message: str) -> bool:
+        status.stop()
+        try:
+            return Confirm.ask(f"[{STYLE_ACCENT}]{message}[/{STYLE_ACCENT}]", default=False)
+        finally:
+            status.start()
+    return 
+
+def make_confirm_typed_callback(status: Status):
+    def _confirm_typed(message: str, phrase: str) -> bool:
+        status.stop()
+        try:
+            console.print(
+                Panel(
+                    message,
+                    title=Text("Confirmação reforçada necessária", style=STYLE_ERROR),
+                    border_style=STYLE_ERROR,
+                    box=box.ROUNDED,
+                )
+            )
+            resposta = Prompt.ask(
+                f"Digite [{STYLE_ACCENT}]{phrase}[/{STYLE_ACCENT}] para confirmar"
+            )
+            return resposta.strip() == phrase
+        finally:
+            status.start()
+    return _confirm_typed
 
 def handle_generated_files(files: list[Path]) -> None:
     """Pergunta ao usuário, para cada arquivo gerado nesta resposta (ex: gráficos),
