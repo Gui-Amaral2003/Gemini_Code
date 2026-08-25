@@ -41,7 +41,7 @@ EXPLORATORY_TOOLS = {
     "create_file",
     "describe_sheet_column",
     "describe_table_column",
-    'run_script' ##Interessante o modelo mais forte interpretar o script caso der erro
+    'run_script', ##Interessante o modelo mais forte interpretar o script caso der erro
     "git_status",
     "git_log",
 }
