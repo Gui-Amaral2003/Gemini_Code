@@ -2,6 +2,7 @@ from .database import TABELAS_PERMITIDAS
 from .plotting import VALID_CHART_TYPES
 from .git_tool import GIT_ALLOWED_REPOS
 
+_TABELAS_EDITAVEIS = [t for t, cfg in TABELAS_PERMITIDAS.items() if cfg.get("colunas_editaveis")]
 # Descrição das ferramentas que será enviada ao Gemini.
 TOOL_DEFINITIONS = [
     {
@@ -108,6 +109,94 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["table"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "update_table",
+        "description": (
+            "Atualiza (UPDATE) linhas de uma tabela pré-cadastrada. SEMPRE exige "
+            "pelo menos uma condição de filtro (conditions) — não é possível "
+            "atualizar sem WHERE. Antes de executar, o usuário vê o SQL e a "
+            "quantidade de linhas afetadas e precisa confirmar digitando uma "
+            "frase. Operações que afetariam um número muito grande de linhas "
+            "são bloqueadas automaticamente."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "description": "Nome da tabela a atualizar.",
+                    "enum": _TABELAS_EDITAVEIS,
+                },
+                "set": {
+                    "type": "object",
+                    "description": (
+                        "Mapa coluna -> novo valor. Somente colunas explicitamente "
+                        "liberadas para edição são aceitas."
+                    ),
+                    "additionalProperties": {"type": "string"},
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Filtro obrigatório (WHERE), combinado com AND. Não pode ser vazio.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação.",
+                            },
+                            "value": {"description": "Valor a comparar."},
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+            },
+            "required": ["table", "set", "conditions"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "delete_table_rows",
+        "description": (
+            "Apaga (DELETE) linhas de uma tabela pré-cadastrada. SEMPRE exige "
+            "pelo menos uma condição de filtro (conditions) — não é possível "
+            "apagar sem WHERE. Antes de executar, o usuário vê o SQL e a "
+            "quantidade de linhas afetadas e precisa confirmar digitando uma "
+            "frase. Operações que afetariam um número muito grande de linhas "
+            "são bloqueadas automaticamente."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "table": {
+                    "type": "string",
+                    "description": "Nome da tabela onde apagar linhas.",
+                    "enum": _TABELAS_EDITAVEIS,
+                },
+                "conditions": {
+                    "type": "array",
+                    "description": "Filtro obrigatório (WHERE), combinado com AND. Não pode ser vazio.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "column": {"type": "string", "description": "Nome da coluna a filtrar."},
+                            "operator": {
+                                "type": "string",
+                                "enum": ["=", "!=", ">", "<", ">=", "<=", "LIKE"],
+                                "description": "Operador de comparação.",
+                            },
+                            "value": {"description": "Valor a comparar."},
+                        },
+                        "required": ["column", "operator", "value"],
+                    },
+                },
+            },
+            "required": ["table", "conditions"],
         },
     },
     {

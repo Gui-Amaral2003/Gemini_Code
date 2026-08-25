@@ -9,6 +9,7 @@
 ##TODO: 9. Prosseguir com a criação dos tests
 ##TODO 10. Testar economia gerada pelo model_routing
 ##TODO 11. Permitir escrita no modulo git, não apenas leitura
+##TODO 12. Corrigir loop infinito após o modelo chamar update_table/remove_table_rows
 from pathlib import Path
 import logging
 from gemini import GeminiClient, ChatSession
@@ -83,7 +84,7 @@ console = Console()
 # Agrupamento só para exibição no /tools — não tem relação com o roteamento multi-modelo (ver gemini/model_routing.py), que classifica por posição provável na cadeia de tool-calling, não por domínio.
 TOOL_CATEGORIES = {
     "Arquivos e scripts": ["read_file", "create_file", "run_script"],
-    "Banco de dados": ["query_table"],
+    "Banco de dados": ["query_table", 'update_table', 'delete_table_rows'],
     "Planilhas": ["list_sheets", "preview_sheet", "read_sheet", "search_in_sheet"],
     "Análise de dados": ["analyze_sheet_data", "analyze_table_data", 'describe_sheet_column', 'describe_table_column'],
     "Gráficos": ["plot_sheet_data", "plot_table_data"],
@@ -135,21 +136,23 @@ def main():
         chame as ferramentas de plot nesse caso.
 
         REGRA CRÍTICA sobre alteração de dados no banco:
-        query_table é SOMENTE LEITURA. Não existe, hoje, nenhuma ferramenta para
-        INSERT, UPDATE ou DELETE em tabelas do banco de dados.
+        query_table é SOMENTE LEITURA. Para alterar dados, as ÚNICAS ferramentas
+        permitidas são update_table (UPDATE) e delete_table_rows (DELETE) — ambas
+        exigem filtro obrigatório e confirmação explícita do usuário antes de
+        executar qualquer coisa.
 
         É TERMINANTEMENTE PROIBIDO usar create_file + run_script (ou qualquer outra
         combinação de ferramentas) para escrever, gerar ou executar código que
-        modifique dados em uma tabela do banco — isso inclui DELETE, UPDATE, INSERT,
-        TRUNCATE, DROP, ALTER, ou qualquer statement SQL que não seja SELECT.
-        create_file e run_script existem para tarefas de apoio (ex: pequenos scripts
-        de análise, automações locais), nunca como caminho alternativo para modificar
-        dados quando a ferramenta apropriada não existe.
+        modifique dados em uma tabela do banco por fora de update_table/
+        delete_table_rows — isso inclui DELETE, UPDATE, INSERT, TRUNCATE, DROP,
+        ALTER, ou qualquer statement SQL que não seja SELECT. create_file e
+        run_script existem para tarefas de apoio (ex: pequenos scripts de análise,
+        automações locais), nunca como caminho alternativo para modificar dados
+        quando update_table/delete_table_rows já resolvem o caso.
 
-        Se o usuário pedir para apagar, atualizar ou inserir uma linha/registro em uma
-        tabela do banco, explique que essa ferramenta ainda não está disponível e
-        NÃO tente contornar essa limitação de nenhuma forma. Não gere o script, não
-        proponha o script, apenas informe a limitação.
+        Se o usuário pedir para inserir uma linha nova (INSERT), explique que essa
+        ferramenta ainda não está disponível e NÃO tente contornar essa limitação
+        de nenhuma forma.
         """
     )
 

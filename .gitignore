@@ -224,6 +224,7 @@ __marimo__/
 chat_sessions.json
 gemini_cache.json
 gemini_usage_log.jsonl
+db_write_audit_log.jsonl
 
 output/
 .vscode/

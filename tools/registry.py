@@ -24,6 +24,7 @@ from .git_tool import (
     git_show,
     git_blame,
 )
+from .write_operations import update_table, delete_table_rows
 
 # Funções que o Python realmente pode executar.
 TOOLS = {
@@ -31,6 +32,8 @@ TOOLS = {
     "create_file": create_file,
     "run_script": run_script,
     'query_table': query_table,
+    'update_table': update_table,
+    'delete_table_rows': delete_table_rows,
     'list_sheets': list_sheets,
     'preview_sheet': preview_sheet,
     'read_sheet': read_sheet,

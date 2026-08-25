@@ -18,6 +18,8 @@ qualquer tool não catalogada aqui, o roteamento é conservador por padrão
 """
 
 TERMINAL_TOOLS = {
+    "update_table",
+    "delete_table_rows",
     "analyze_sheet_data",
     "analyze_table_data",
     "plot_sheet_data",

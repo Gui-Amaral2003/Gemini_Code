@@ -23,6 +23,7 @@ TABELAS_PERMITIDAS = {
             'Deal_Date': 'date'
         },
         "colunas_retorno": ["ID", "WBC_TERM", "CTG_SUBMITTER", "Counterpart_CNPJ", "Contract_Type", "Supply_Start", "Supply_End", "Company", 'Deal_Date'],
+        "colunas_editaveis": {'WBC_TERM': 'str', 'Flag': 'str', 'Status': 'str'}
     }
 }
 
@@ -51,7 +52,7 @@ def get_engine():
         conn_string = os.environ.get("DB_CONN_STRING")
         _ENGINE_CACHE = sqlalchemy.create_engine(conn_string, connect_args={"timeout": QUERY_TIMEOUT_SECONDS})
 
-        return _ENGINE_CACHE
+    return _ENGINE_CACHE
 
 def reset_engine_cache() -> None:
     """
