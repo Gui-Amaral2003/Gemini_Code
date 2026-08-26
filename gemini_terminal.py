@@ -439,7 +439,7 @@ def make_confirm_callback(status: Status):
             return Confirm.ask(f"[{STYLE_ACCENT}]{message}[/{STYLE_ACCENT}]", default=False)
         finally:
             status.start()
-    return 
+    return _confirm
 
 def make_confirm_typed_callback(status: Status):
     def _confirm_typed(message: str, phrase: str) -> bool:
