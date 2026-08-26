@@ -3,6 +3,7 @@ from .plotting import VALID_CHART_TYPES
 from .git_tool import GIT_ALLOWED_REPOS
 
 _TABELAS_EDITAVEIS = [t for t, cfg in TABELAS_PERMITIDAS.items() if cfg.get("colunas_editaveis")]
+_GIT_REPOS_EDITAVEIS = [nome for nome, cfg in GIT_ALLOWED_REPOS.items() if cfg.get("writable")]
 # Descrição das ferramentas que será enviada ao Gemini.
 TOOL_DEFINITIONS = [
     {
@@ -942,6 +943,45 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["repo", "path"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "edit_repo_file",
+        "description": (
+            "Edita um arquivo dentro de um repositório git pré-cadastrado como "
+            "editável, substituindo uma ocorrência única de old_str por new_str. "
+            "Exige que o arquivo esteja com o working tree limpo (sem mudanças "
+            "não commitadas) — se não estiver, peça ao usuário para commitar ou "
+            "descartar antes. Mostra o diff real ao usuário antes de aplicar, e "
+            "exige confirmação reforçada (digitar uma frase). Se a confirmação "
+            "for recusada, a edição é revertida automaticamente."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "repo": {
+                    "type": "string",
+                    "description": "Nome do repositório pré-cadastrado como editável.",
+                    "enum": _GIT_REPOS_EDITAVEIS,
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Caminho do arquivo dentro do repositório, relativo à raiz.",
+                },
+                "old_str": {
+                    "type": "string",
+                    "description": (
+                        "Trecho exato a ser substituído. Deve ocorrer exatamente uma "
+                        "vez no arquivo — inclua contexto suficiente para ser único."
+                    ),
+                },
+                "new_str": {
+                    "type": "string",
+                    "description": "Texto que substituirá old_str.",
+                },
+            },
+            "required": ["repo", "path", "old_str", "new_str"],
         },
     },
 ]

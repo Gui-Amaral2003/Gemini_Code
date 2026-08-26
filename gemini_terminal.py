@@ -89,7 +89,7 @@ TOOL_CATEGORIES = {
     "Análise de dados": ["analyze_sheet_data", "analyze_table_data", 'describe_sheet_column', 'describe_table_column'],
     "Gráficos": ["plot_sheet_data", "plot_table_data"],
     "PDF": ["preview_pdf", "read_pdf", "search_in_pdf"],
-    "Git": ["git_status", "git_diff_unstaged", "git_diff_staged", "git_log", "git_show", "git_blame"],
+    "Git": ["git_status", "git_diff_unstaged", "git_diff_staged", "git_log", "git_show", "git_blame", 'edit_repo_file'],
 }
 
 ##Config de log, utilizar a *_VISIBLE para debug e *_HIDDEN para produção, assim conseguimos ver os erros/avisos mesmo com log oculto

@@ -462,6 +462,7 @@ repositórios Git locais:
 - `git_log`: lista o histórico de commits com paginação
 - `git_show`: mostra a mensagem e o diff de um commit
 - `git_blame`: mostra a autoria linha a linha de um arquivo
+- `edit_repo_file`: Edita um arquivo dentro de um repositório git pré-cadastrado como editável, substituindo uma ocorrência única de old_str por new_str. Exige que o arquivo esteja com o working tree limpo (sem mudanças não commitadas)
 
 Por segurança, as ferramentas aceitam somente nomes de repositórios definidos em
 `GIT_ALLOWED_REPOS`; não executam comandos de escrita e não recebem flags livres

@@ -23,6 +23,7 @@ from .git_tool import (
     git_log,
     git_show,
     git_blame,
+    edit_repo_file
 )
 from .write_operations import update_table, delete_table_rows
 
@@ -53,4 +54,5 @@ TOOLS = {
     'git_log': git_log,
     'git_show': git_show,
     'git_blame': git_blame,
+    'edit_repo_file': edit_repo_file,
 }

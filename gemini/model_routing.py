@@ -30,6 +30,7 @@ TERMINAL_TOOLS = {
     "git_diff_staged",
     "git_show",
     "git_blame",
+    "edit_repo_file"
 }
  
 EXPLORATORY_TOOLS = {
