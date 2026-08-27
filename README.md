@@ -31,7 +31,7 @@ A biblioteca foi reorganizada em um pacote Python dedicado em `gemini/`. O arqui
 ### 1. Clone o repositório
 
 ```bash
-git clone <seu-repositorio>
+git clone https://github.com/Gui-Amaral2003/Gemini_Code
 cd gemini
 ```
 
