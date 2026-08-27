@@ -241,30 +241,3 @@ def delete_table_rows(table: str, conditions: list[dict]) -> dict:
     MAX_AFFECTED_ROWS linhas.
     """
     return _execute_write(table, "DELETE", conditions, set_values=None)
-
-# --------------------------------------------------------------------------- #
-# Tools expostas ao Gemini
-# --------------------------------------------------------------------------- #
- 
-def update_table(table: str, set: dict, conditions: list[dict]) -> dict:
-    """
-    Atualiza (UPDATE) linhas de uma tabela pré-cadastrada. Exige pelo menos
-    uma condição de filtro (conditions não pode ser vazio) e mostra ao
-    usuário o SQL e a contagem de linhas afetadas antes de pedir
-    confirmação reforçada. Bloqueado se o filtro atingir mais de
-    MAX_AFFECTED_ROWS linhas.
-    """
-    if not set:
-        return {"success": False, "error": "set não pode ser vazio para um UPDATE."}
-    return _execute_write(table, "UPDATE", conditions, set_values=set)
- 
- 
-def delete_table_rows(table: str, conditions: list[dict]) -> dict:
-    """
-    Apaga (DELETE) linhas de uma tabela pré-cadastrada. Exige pelo menos
-    uma condição de filtro (conditions não pode ser vazio) e mostra ao
-    usuário o SQL e a contagem de linhas afetadas antes de pedir
-    confirmação reforçada. Bloqueado se o filtro atingir mais de
-    MAX_AFFECTED_ROWS linhas.
-    """
-    return _execute_write(table, "DELETE", conditions, set_values=None)
