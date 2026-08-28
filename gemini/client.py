@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import hashlib
+import uuid
 import json
 import logging
 import random
@@ -17,12 +17,12 @@ from .cache import PromptCache
 from .config import (
     DEFAULT_CACHE_PATH,
     DEFAULT_MODEL,
-    DEFAULT_SESSIONS_PATH,
+    DEFAULT_TRACE_LOG_PATH,
     DEFAULT_USAGE_LOG_PATH,
     RETRYABLE_ERRORS,
 )
 from .model_routing import all_terminal
-from .models import GeminiResponse, Message
+from .models import GeminiResponse
 
 try:
     from dotenv import load_dotenv
@@ -56,6 +56,7 @@ class GeminiClient:
         api_key: Optional[str] = None,
         default_model: str = DEFAULT_MODEL,
         usage_log_path: Path | str = DEFAULT_USAGE_LOG_PATH,
+        trace_log_path: Path | str = DEFAULT_TRACE_LOG_PATH,
         max_retries: int = 3,
         use_cache: bool = True,
         cache_path: Path | str = DEFAULT_CACHE_PATH,
@@ -73,7 +74,11 @@ class GeminiClient:
             "gemini-2.5-flash",
             "gemini-2.5-flash-lite",
         ]
+
+        # gemini_usage_log.jsonl — 1 linha por generate() COMPLETO, com tokens agregados de todas as tentativas internas. Fonte de custo/consumo (alimenta session_summary()/`/tokens`). Ver _log_usage().
         self.usage_log_path = Path(usage_log_path)
+        # interaction_trace_log.jsonl — 1 linha por TENTATIVA individual de chamada ao modelo dentro de _create_with_fallback (início e depois sucesso/erro), correlacionadas por call_id. Existe só para diagnóstico de latência/hang entre chamadas — NÃO é fonte de custo (isso é o usage log acima) e é sempre gravado, independente do nível do logger (`/logs` oculto não afeta este arquivo). Ver _log_trace_attempt().
+        self.trace_log_path = Path(trace_log_path)
         self.max_retries = max_retries
         self.cache = PromptCache(cache_path) if use_cache else None
         self._thought_callback: Optional[Callable[[str], None]] = None
@@ -245,6 +250,8 @@ class GeminiClient:
         preferred_model: Optional[str] = None,
         system_instruction=None,
         generation_config=None,
+        call_id: Optional[str] = None,
+        stage: str = 'unknown',
     ):
         last_error = None
         models_to_try = []
@@ -254,6 +261,8 @@ class GeminiClient:
                 models_to_try.append(candidate)
 
         for model in models_to_try:
+            if call_id:
+                self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="start")
             try:
                 print(f"[Gemini] Tentando modelo: {model}")
                 interaction = self._create_interaction(
@@ -265,9 +274,15 @@ class GeminiClient:
                     generation_config=generation_config,
                 )
                 print(f"[Gemini] Modelo utilizado: {model}")
+
+                if call_id:
+                    self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="success")
                 return interaction, model
+            
             except Exception as error:
                 last_error = error
+                if call_id:
+                    self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="failure", error=str(error))
                 if self._is_rate_limit_error(error):
                     print(
                         f"[Gemini] {model} indisponível por limite de uso. "
@@ -359,6 +374,7 @@ class GeminiClient:
         if self.show_thoughts:
             generation_config["thinking_summaries"] = "auto"
 
+        call_id = uuid.uuid4().hex[:12]
         attempt = 0
         while True:
             attempt += 1
@@ -387,6 +403,8 @@ class GeminiClient:
                     preferred_model=model,
                     system_instruction=system,
                     generation_config=generation_config or None,
+                    call_id=call_id,
+                    stage="initial",
                 )
                 _accumulate_usage(interaction)
                 accumulated_thoughts.extend(self._process_thoughts(interaction))
@@ -436,6 +454,8 @@ class GeminiClient:
                         previous_interaction_id=prior_interaction_id,
                         preferred_model=next_model_preference,
                         system_instruction=system,
+                        stage="cheap_synthesis" if used_cheap_model else "tool_continuation",
+                        call_id=call_id,
                     )
                     _accumulate_usage(interaction)
                     accumulated_thoughts.extend(self._process_thoughts(interaction))
@@ -452,6 +472,8 @@ class GeminiClient:
                             previous_interaction_id=prior_interaction_id,
                             preferred_model=self.default_model,
                             system_instruction=system,
+                            call_id=call_id,
+                            stage="strong_fallback",
                         )
                         _accumulate_usage(interaction)
                         accumulated_thoughts.extend(self._process_thoughts(interaction))
@@ -530,6 +552,30 @@ class GeminiClient:
             thoughts=thoughts or [],
             raw=interaction,
         )
+
+    def _log_trace_attempt(self, *, call_id: str, stage: str, model: str, phase: str, error: Optional[str] = None) -> None:
+        """
+        Grava uma tentativa individual de chamada ao modelo no trace log.
+        stage identifica em qual ponto do fluxo de generate() a tentativa
+        ocorreu: "initial", "tool_continuation", "cheap_synthesis" ou
+        "strong_fallback". phase é "start", "success" ou "error".
+        """
+        entry = {
+            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "call_id": call_id,
+            "stage": stage,
+            "model": model,
+            "phase": phase,
+        }
+        if error is not None:
+            entry['error'] = error
+
+        try:
+            self.trace_log_path.parent.mkdir(parents = True, exist_ok = True)
+            with open(self.trace_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii = False, default = str) + '\n')
+        except OSError as e:
+            logger.warning("Não consegui gravar o log de rastreio em %s: %s", self.trace_log_path, e)
 
     def _log_usage(self, response: GeminiResponse, cached: bool = False) -> None:
         self._session_input_tokens += response.input_tokens

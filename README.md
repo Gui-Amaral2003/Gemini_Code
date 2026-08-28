@@ -539,7 +539,14 @@ Para adicionar outro repositório (ou torná-lo editável), inclua a entrada em 
 
 ## 📊 Logging e monitoramento
 
-O cliente grava o uso acumulado em `gemini/gemini_usage_log.jsonl` e mantém o cache de respostas em `gemini/gemini_cache.json`. Sessões com `session_id` são persistidas em `gemini/chat_sessions.json`. Escritas no banco ficam auditadas em `gemini/db_write_audit_log.jsonl`, e edições de arquivos em repositórios Git ficam auditadas em `gemini/git_write_audit_log.jsonl`. Esses arquivos são gerados localmente e não fazem parte do repositório.
+| Arquivo | Granularidade | Propósito |
+|---|---|---|
+| `gemini/gemini_usage_log.jsonl` | 1 linha por `generate()` completo | Custo/consumo — tokens agregados de todas as tentativas internas. Fonte do `/tokens` e `session_summary()`. |
+| `gemini/interaction_trace_log.jsonl` | 1 linha por tentativa individual de chamada ao modelo (início + fim/erro) | Diagnóstico de latência/hang. Correlacionado por `call_id`; **não** é fonte de custo. Sempre gravado, mesmo com `/logs` oculto. |
+| `gemini/db_write_audit_log.jsonl` | 1 linha por tentativa de `update_table`/`delete_table_rows` | Auditoria de escrita no banco — sucesso, erro ou cancelamento pelo usuário. |
+| `gemini/git_write_audit_log.jsonl` | 1 linha por tentativa de `edit_repo_file` | Auditoria de edição de arquivos em repositórios git. |
+
+Todos os quatro são gerados localmente e não fazem parte do repositório.
 
 ### Verificar uso de tokens
 
