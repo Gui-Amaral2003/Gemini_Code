@@ -51,15 +51,20 @@ MAX_AFFECTED_ROWS = 500
 CONFIRM_PHRASE = "EXECUTAR"
 WRITE_AUDIT_LOG_PATH = Path("gemini/db_write_audit_log.jsonl")
 
-def get_write_engine():
+def get_write_engine(connection_name: str):
     """
-    Engine usada por update_table/delete_table_rows. Hoje reaproveita a
-    mesma engine de leitura (get_engine(), em database.py) — DB_CONN_STRING
-    ainda não tem uma credencial de escrita dedicada. Isolado nesta função
-    para que a troca por uma DB_CONN_STRING_WRITE própria seja uma mudança
-    local, sem tocar no resto deste módulo.
+    Engine usada por update_table/delete_table_rows. Hoje recebe a conexão
+    da própria tabela (config["connection"]) — na prática, sempre resolve
+    para "sqlserver_main", já que Hive não tem colunas_editaveis cadastradas
+    (ver TABELAS_PERMITIDAS em database.py). Mantido como parâmetro em vez
+    de fixo para não precisar mexer aqui de novo se um dia uma conexão
+    Hive/MySQL ACID for liberada para escrita — mas atenção: o SQL deste
+    módulo (_build_where, _execute_write) ainda assume colchetes de
+    identificador ([schema].[table]), que é sintaxe mssql. Se/quando
+    escrita em outro dialeto for necessária, este módulo também precisa
+    ficar dialect-aware (mesma lógica de _quote_identifier de database.py).
     """
-    return get_engine()
+    return get_engine(connection_name)
 
 def _validate_table_and_columns(table: str, set_values: Optional[dict]) -> tuple[Optional[dict], Optional[str]]:
     """Valida a tabela e, se houver set_values, as colunas contra colunas_editaveis."""
@@ -140,6 +145,7 @@ def _execute_write(table, operation: str, conditions: list[dict], set_values: Op
         return {"success": False, "error": error}
 
     schema = config["schema"]
+    connection_name = config['connection']
     _validate_identifier(schema, 'schema')
     _validate_identifier(table, 'tabela')
 
@@ -164,7 +170,7 @@ def _execute_write(table, operation: str, conditions: list[dict], set_values: Op
             set_params[param_name] = valor
         set_clause_sql = ", ".join(set_pieces)
 
-    engine = get_write_engine()
+    engine = get_write_engine(connection_name)
 
     preview_total, error = _preview_count(engine, schema, table, where_sql, where_params)
     if error:
