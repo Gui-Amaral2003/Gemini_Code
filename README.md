@@ -71,18 +71,76 @@ Uma chave Gemini gratuita pode ser obtida em [ai.google.dev](https://ai.google.d
 
 `DB_CONN_STRING` é **opcional** — veja a seção abaixo antes de decidir se precisa dela.
 
-### 4. As ferramentas de banco de dados são opcionais
+### 4. Banco de dados: múltiplas conexões (SQL Server + Hive)
 
-Sem `DB_CONN_STRING` configurada, tudo funciona normalmente **exceto** as ferramentas que dependem de banco:
-`query_table`, `update_table`, `delete_table_rows`, `analyze_table_data`, `describe_table_column` e `plot_table_data`.
+Sem nenhuma `DB_CONNECTIONS` configurada, tudo funciona normalmente **exceto**
+as ferramentas que dependem de banco: `query_table`, `update_table`,
+`delete_table_rows`, `analyze_table_data`, `describe_table_column` e
+`plot_table_data`.
 
-Todo o resto — leitura e análise de planilhas/CSV, PDFs, arquivos, execução de scripts e as ferramentas Git — funciona sem nenhum banco configurado.
+O projeto suporta múltiplas conexões simultâneas (ex: SQL Server e Hive ao
+mesmo tempo), cadastradas em `tools/db_connections.py`. Cada tabela em
+`TABELAS_PERMITIDAS` (`tools/database.py`) aponta para uma conexão pelo nome
+lógico (`connection`), e o SQL gerado respeita automaticamente o dialeto
+daquela conexão (quoting de identificador, posição do `LIMIT`/`TOP`).
 
-Se você **quiser** testar as ferramentas de banco:
+Todo o resto — planilhas/CSV, PDFs, arquivos, scripts, Git e Airflow —
+funciona sem nenhum banco configurado.
 
-1. Aponte `DB_CONN_STRING` para o seu próprio SQL Server (ou adapte `tools/database.py` para outro driver/dialeto).
-2. Cadastre suas próprias tabelas em `TABELAS_PERMITIDAS`, em `tools/database.py`. A tabela de exemplo (`TEST_DOA_DEALS`) é específica do ambiente original do autor e **não existirá no seu banco** — o catálogo serve como referência de formato, não como algo para reaproveitar.
-3. Para liberar escrita (`update_table`/`delete_table_rows`) em uma tabela, adicione a chave `colunas_editaveis` na configuração dessa tabela.
+#### Configurando SQL Server
+
+```env
+DB_CONN_STRING=sua_connection_string_aqui
+```
+
+#### Configurando Hive
+
+```env
+HIVE_HOST=seu_host
+HIVE_PORT=10000
+HIVE_DATABASE=seu_database
+HIVE_USER=seu_usuario
+HIVE_PASSWORD=sua_senha
+```
+
+A conexão com Hive é montada por componentes separados (não por connection
+string pronta), o que evita problemas de encoding quando a senha LDAP contém
+caracteres especiais (`@`, `:`, etc). Requer os pacotes `pyhive[hive]` e
+`thrift` (ver requirements.txt).
+
+**Hive é somente leitura por padrão de design**: tabelas cadastradas com
+`connection: "hive_lake"` não devem receber `colunas_editaveis`, porque a
+maioria das tabelas Hive não é transacional (ACID) — `update_table`/
+`delete_table_rows` continuam assumindo o dialeto SQL Server.
+
+#### Cadastrando tabelas
+
+Em `TABELAS_PERMITIDAS` (`tools/database.py`), cada tabela declara a
+conexão a usar:
+
+```python
+TABELAS_PERMITIDAS = {
+    "SUA_TABELA_SQLSERVER": {
+        "connection": "sqlserver_main",
+        "schema": "seu_schema",
+        "colunas_filtro": {...},
+        "colunas_retorno": [...],
+        "colunas_editaveis": {...},  # opcional — libera update_table/delete_table_rows
+    },
+    "SUA_TABELA_HIVE": {
+        "connection": "hive_lake",
+        "schema": "seu_schema",
+        "colunas_filtro": {...},
+        "colunas_retorno": [...],
+        # sem colunas_editaveis — Hive fica somente leitura
+    },
+}
+```
+
+Para adicionar um banco com sintaxe parecida com um dialeto já cadastrado
+(ex: MySQL, que usa crase + `LIMIT` igual ao Hive), não é preciso criar um
+dialeto novo em `DB_DIALECTS` — só uma entrada em `DB_CONNECTIONS`
+apontando para o dialeto existente.
 
 ### 5. Rode o terminal interativo
 
@@ -284,7 +342,9 @@ print(response.text)
 │   ├── confirmation.py         # Confirmações explícitas para operações sensíveis
 │   ├── script_runner.py        # Execução confirmada de scripts Python
 │   ├── script_safety.py        # Varredura estática de scripts antes da execução
-│   ├── database.py             # Leitura de tabelas pré-cadastradas (query_table)
+│   ├── database.py             # Leitura de tabelas pré-cadastradas (query_tableCat)
+│   ├── db_connections.py       # Catálogo de conexões e dialetos (SQL Server, Hive)
+│   ├── airflow_tools.py        # Monitoramento de DAGs via API v2 do Airflow
 │   ├── write_operations.py     # UPDATE/DELETE controlados, com confirmação e audit log
 │   ├── spreadsheet.py          # Leitura e busca em planilhas/CSV
 │   ├── data_analysis.py        # Agregação e análise de dados em planilhas e tabelas
@@ -535,6 +595,44 @@ Para adicionar outro repositório (ou torná-lo editável), inclua a entrada em 
              └─────────────────────┘
 ```
 
+### 12. Ferramentas Airflow
+
+`tools/airflow_tool.py` fornece monitoramento somente-leitura de DAGs via
+API v2 do Airflow (Airflow 3.x):
+
+- `list_dags` — lista os DAGs pré-cadastrados com status (pausado/ativo) e agenda
+- `get_dag_runs` — execuções mais recentes de um DAG, com estado e datas
+- `get_task_instances` — tasks de uma execução específica, com estado e duração
+- `get_task_log` — log de uma task específica, útil para investigar falhas
+
+Apenas DAGs cadastrados em `AIRFLOW_ALLOWED_DAGS` (em `tools/airflow_tool.py`)
+podem ser consultados — mesmo padrão de whitelist de `TABELAS_PERMITIDAS` e
+`GIT_ALLOWED_REPOS`. A autenticação usa um token JWT obtido via login
+(`/auth/token`), cacheado em memória e renovado automaticamente se expirar
+no meio da sessão.
+
+```env
+AIRFLOW_API_URL=http://sua-vm:8080
+AIRFLOW_USERNAME=seu_usuario
+AIRFLOW_PASSWORD=sua_senha
+```
+
+```python
+from tools.airflow_tool import list_dags, get_dag_runs, get_task_log
+
+print(list_dags())
+print(get_dag_runs("seu_dag_id", max_runs=5))
+print(get_task_log("seu_dag_id", run_id="...", task_id="...", try_number=1))
+```
+
+**Escopo atual: somente leitura.** Disparar (`trigger_dag`) ou pausar/
+despausar DAGs ainda não está implementado — fica como TODO futuro, com o
+mesmo tratamento de segurança já usado em `update_table`/`edit_repo_file`
+(whitelist própria para escrita, confirmação reforçada, audit log dedicado).
+
+Para adicionar um DAG à whitelist, inclua a entrada em `AIRFLOW_ALLOWED_DAGS`,
+em `tools/airflow_tool.py`.
+
 ---
 
 ## 📊 Logging e monitoramento
@@ -589,7 +687,7 @@ Este projeto está em desenvolvimento ativo. Contribuições são bem-vindas!
 - [x] ferramentas de análise de dados
 - [x] ferramentas de leitura e edição controlada em Git
 - [ ] credencial de banco somente leitura na camada de infraestrutura
-- [ ] suporte a outros bancos de dados
+- [x] suporte a outros bancos de dados
 - [ ] integração com armazenamento em nuvem
 - [ ] web UI para gerenciar sessões
 - [ ] suporte a embeddings e RAG

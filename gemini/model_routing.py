@@ -30,7 +30,9 @@ TERMINAL_TOOLS = {
     "git_diff_staged",
     "git_show",
     "git_blame",
-    "edit_repo_file"
+    "edit_repo_file",
+    'get_task_instances',
+    'get_task_log'
 }
  
 EXPLORATORY_TOOLS = {
@@ -47,6 +49,8 @@ EXPLORATORY_TOOLS = {
     'run_script', ##Interessante o modelo mais forte interpretar o script caso der erro
     "git_status",
     "git_log",
+    'list_dags',
+    'get_dag_runs',
 }
 
 def all_terminal(tool_names: list[str]) -> bool:

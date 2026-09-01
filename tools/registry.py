@@ -26,6 +26,12 @@ from .git_tool import (
     edit_repo_file
 )
 from .write_operations import update_table, delete_table_rows
+from .airflow_tool import (
+    list_dags,
+    get_dag_runs,
+    get_task_instances,
+    get_task_log,
+)
 
 # Funções que o Python realmente pode executar.
 TOOLS = {
@@ -55,4 +61,8 @@ TOOLS = {
     'git_show': git_show,
     'git_blame': git_blame,
     'edit_repo_file': edit_repo_file,
+    'list_dags': list_dags,
+    'get_dag_runs': get_dag_runs,
+    'get_task_instances': get_task_instances,
+    'get_task_log': get_task_log,
 }

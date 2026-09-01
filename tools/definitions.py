@@ -1,6 +1,7 @@
 from .database import TABELAS_PERMITIDAS
 from .plotting import VALID_CHART_TYPES
 from .git_tool import GIT_ALLOWED_REPOS
+from .airflow_tool import AIRFLOW_ALLOWED_DAGS
 
 _TABELAS_EDITAVEIS = [t for t, cfg in TABELAS_PERMITIDAS.items() if cfg.get("colunas_editaveis")]
 _GIT_REPOS_EDITAVEIS = [nome for nome, cfg in GIT_ALLOWED_REPOS.items() if cfg.get("writable")]
@@ -982,6 +983,94 @@ TOOL_DEFINITIONS = [
                 },
             },
             "required": ["repo", "path", "old_str", "new_str"],
+        },
+    },
+        {
+        "type": "function",
+        "name": "list_dags",
+        "description": (
+            "Lista os DAGs pré-cadastrados do Airflow com status básico "
+            "(pausado/ativo, agenda). Use antes de get_dag_runs para "
+            "confirmar o dag_id."
+        ),
+        "parameters": {"type": "object", "properties": {}},
+    },
+    {
+        "type": "function",
+        "name": "get_dag_runs",
+        "description": (
+            "Lista as execuções (runs) mais recentes de um DAG pré-cadastrado, "
+            "com estado e datas de início/fim."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dag_id": {
+                    "type": "string",
+                    "description": "Nome do DAG pré-cadastrado.",
+                    "enum": list(AIRFLOW_ALLOWED_DAGS.keys()),
+                },
+                "max_runs": {
+                    "type": "integer",
+                    "description": "Máximo de execuções a retornar. Padrão: 10.",
+                },
+            },
+            "required": ["dag_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_task_instances",
+        "description": (
+            "Lista as tasks de uma execução (run) específica de um DAG "
+            "pré-cadastrado, com estado e duração de cada uma."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dag_id": {
+                    "type": "string",
+                    "description": "Nome do DAG pré-cadastrado.",
+                    "enum": list(AIRFLOW_ALLOWED_DAGS.keys()),
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "ID da execução (obtido via get_dag_runs).",
+                },
+            },
+            "required": ["dag_id", "run_id"],
+        },
+    },
+    {
+        "type": "function",
+        "name": "get_task_log",
+        "description": (
+            "Retorna o log de execução de uma task específica. Útil para "
+            "investigar falhas — use get_task_instances antes para confirmar "
+            "task_id e try_number."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "dag_id": {
+                    "type": "string",
+                    "description": "Nome do DAG pré-cadastrado.",
+                    "enum": list(AIRFLOW_ALLOWED_DAGS.keys()),
+                },
+                "run_id": {
+                    "type": "string",
+                    "description": "ID da execução (obtido via get_dag_runs).",
+                },
+                "task_id": {
+                    "type": "string",
+                    "description": "ID da task (obtido via get_task_instances).",
+                },
+                "try_number": {
+                    "type": "integer",
+                    "description": "Número da tentativa. Padrão: 1.",
+                },
+            },
+            "required": ["dag_id", "run_id", "task_id"],
         },
     },
 ]

@@ -34,3 +34,10 @@ pypdf>=5.0.0
 # Geração de gráficos (plot_sheet_data / plot_table_data)
 matplotlib>=3.7.0
 plotext>=5.2.8
+
+# Cliente HTTP (integração com a API do Airflow)
+requests>=2.31.0
+
+# Driver Hive (conex~eos via SQLAlchemy, auth LDAP)
+pyhive[hive]>=0.7.0
+thrift>=0.16.0

@@ -43,7 +43,7 @@ MAX_ROWS = 10000
 #QUERY_TIMEOUT_SECONDS = 10
 
 # Cache do singleton lazy da engine — ver get_engine()/reset_engine_cache().
-_ENGINE_CACHE: Optional['object'] = None
+_ENGINE_CACHE: Optional['object'] = {}
 
 def _build_engine_url(connection_name: str) -> str:
     """
@@ -128,7 +128,7 @@ def reset_engine_cache(connection_name: Optional[str] = None) -> None:
         _ENGINE_CACHE.pop(connection_name, None)
 
 def _quote_identifier(name: str, dialect_config: dict) -> str:
-    open_quote, close_quote = dialect_config['identifier_quotes']
+    open_quote, close_quote = dialect_config['quote']
 
     return f"{open_quote}{name}{close_quote}"
 

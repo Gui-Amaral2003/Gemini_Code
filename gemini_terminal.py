@@ -90,6 +90,7 @@ TOOL_CATEGORIES = {
     "Gráficos": ["plot_sheet_data", "plot_table_data"],
     "PDF": ["preview_pdf", "read_pdf", "search_in_pdf"],
     "Git": ["git_status", "git_diff_unstaged", "git_diff_staged", "git_log", "git_show", "git_blame", 'edit_repo_file'],
+    "Airflow": ["list_dags", "get_dag_runs", "get_task_instances", "get_task_log"],
 }
 
 ##Config de log, utilizar a *_VISIBLE para debug e *_HIDDEN para produção, assim conseguimos ver os erros/avisos mesmo com log oculto
