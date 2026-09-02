@@ -21,6 +21,7 @@ A biblioteca está organizada em um pacote Python dedicado em `gemini/`. O arqui
 - **Retry automático**: recuperação de falhas transitórias com backoff exponencial
 - **Cache inteligente**: evita chamadas duplicadas e reduz custo de tokens
 - **Roteamento multi-modelo**: usa um modelo mais barato para sintetizar a resposta depois de ferramentas terminais, preservando o modelo forte para decisões de novas ferramentas
+- **Tracking de cota diária (RPD)**: contador local por modelo, estimando quanto do limite diário do free tier já foi usado, com bloqueio (via confirmação) quando todos os modelos configurados estimam cota esgotada
 - **Geração de gráficos**: cria gráficos de barra ou linha no terminal e salva PNGs temporários para aprovação do usuário
 - **Logging estruturado**: monitoramento de uso em arquivo JSONL
 - **Terminal interativo**: CLI com Rich para uso prático
@@ -338,9 +339,11 @@ print(response.text)
 │   ├── config.py               # Configurações e caminhos padrão
 │   ├── cache.py                # Cache de prompts e respostas
 │   ├── model_routing.py        # Classificação de tools e roteamento de modelos
+│   ├── quota_tracker.py        # Cota diária (RPD) estimada por modelo, com bloqueio via confirmação
 │   ├── chat_sessions.json      # Histórico persistente das sessões (gerado localmente)
 │   ├── gemini_cache.json       # Cache local de respostas (gerado localmente)
 │   ├── gemini_usage_log.jsonl  # Log local de uso da API (gerado localmente)
+│   ├── quota_tracker.json      # Contador de RPD do dia atual, por modelo (gerado localmente)
 │   └── db_write_audit_log.jsonl # Audit log de escritas no banco (gerado localmente)
 ├── tools/
 │   ├── __init__.py
@@ -658,6 +661,7 @@ em `tools/airflow_tool.py`.
 |---|---|---|
 | `gemini/gemini_usage_log.jsonl` | 1 linha por `generate()` completo | Custo/consumo — tokens agregados de todas as tentativas internas. Fonte do `/tokens` e `session_summary()`. |
 | `gemini/interaction_trace_log.jsonl` | 1 linha por tentativa individual de chamada ao modelo (início + fim/erro) | Diagnóstico de latência/hang. Correlacionado por `call_id`; **não** é fonte de custo. Sempre gravado, mesmo com `/logs` oculto. |
+| `gemini/quota_tracker.json` | 1 registro por modelo, resetado por dia civil | Cota diária (RPD) estimada localmente — não histórico, só o dia atual. Fonte do `/quote`. Estimativa própria, não o limite real do Google. |
 | `gemini/db_write_audit_log.jsonl` | 1 linha por tentativa de `update_table`/`delete_table_rows` | Auditoria de escrita no banco — sucesso, erro ou cancelamento pelo usuário. |
 | `gemini/git_write_audit_log.jsonl` | 1 linha por tentativa de `edit_repo_file` | Auditoria de edição de arquivos em repositórios git. |
 

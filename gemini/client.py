@@ -12,6 +12,7 @@ from google import genai
 from google.genai import errors as genai_errors
 
 from tools import TOOL_DEFINITIONS, TOOLS
+from tools.confirmation import confirm_action
 
 from .cache import PromptCache
 from .config import (
@@ -19,10 +20,12 @@ from .config import (
     DEFAULT_MODEL,
     DEFAULT_TRACE_LOG_PATH,
     DEFAULT_USAGE_LOG_PATH,
+    DEFAULT_QUOTA_PATH,
     RETRYABLE_ERRORS,
 )
 from .model_routing import all_terminal
 from .models import GeminiResponse
+from .quota_tracker import QuotaTracker
 
 try:
     from dotenv import load_dotenv
@@ -57,6 +60,7 @@ class GeminiClient:
         default_model: str = DEFAULT_MODEL,
         usage_log_path: Path | str = DEFAULT_USAGE_LOG_PATH,
         trace_log_path: Path | str = DEFAULT_TRACE_LOG_PATH,
+        quota_path: Path | str = DEFAULT_QUOTA_PATH,
         max_retries: int = 3,
         use_cache: bool = True,
         cache_path: Path | str = DEFAULT_CACHE_PATH,
@@ -79,6 +83,7 @@ class GeminiClient:
         self.usage_log_path = Path(usage_log_path)
         # interaction_trace_log.jsonl — 1 linha por TENTATIVA individual de chamada ao modelo dentro de _create_with_fallback (início e depois sucesso/erro), correlacionadas por call_id. Existe só para diagnóstico de latência/hang entre chamadas — NÃO é fonte de custo (isso é o usage log acima) e é sempre gravado, independente do nível do logger (`/logs` oculto não afeta este arquivo). Ver _log_trace_attempt().
         self.trace_log_path = Path(trace_log_path)
+        self.quota = QuotaTracker(quota_path)
         self.max_retries = max_retries
         self.cache = PromptCache(cache_path) if use_cache else None
         self._thought_callback: Optional[Callable[[str], None]] = None
@@ -221,6 +226,11 @@ class GeminiClient:
                 if generation_config:
                     create_kwargs["generation_config"] = generation_config
 
+                # Conta contra o RPD mesmo se a chamada falhar — mesmo
+                # critério do Google (erro 400/500 ainda consome cota).
+                self.quota.register_call(model)
+
+
                 interaction = self.client.interactions.create(**create_kwargs)
                 return interaction
 
@@ -260,7 +270,38 @@ class GeminiClient:
             if candidate and candidate not in models_to_try:
                 models_to_try.append(candidate)
 
-        for model in models_to_try:
+        # Cota diária (RPD) estimada localmente — pula modelos já esgotados
+        # hoje antes mesmo de tentar (ver gemini/quota_tracker.py). É uma
+        # estimativa própria, não o limite real do Google.
+        available_models = [m for m in models_to_try if not self.quota.is_exhausted(m)]
+        exhausted_models = [m for m in models_to_try if m not in available_models]
+
+        if exhausted_models:
+            logger.info(
+                "Modelo(s) com cota diária estimada esgotada, pulando: %s",
+                ", ".join(exhausted_models),
+            )
+
+        if not available_models:
+            detalhe = ", ".join(
+                f"{m} ({self.quota.used_today(m)}/{self.quota.limit(m)})"
+                for m in models_to_try
+            )
+            mensagem = (
+                f"⚠ Todos os modelos configurados atingiram a cota diária (RPD) "
+                f"estimada localmente: {detalhe}.\n\n"
+                "Isso é uma estimativa própria — a API do Gemini não expõe cota "
+                "real, então pode estar desatualizada. Tentar mesmo assim?"
+            )
+            if not confirm_action(mensagem):
+                raise RuntimeError(
+                    "Cota diária estimada esgotada para todos os modelos "
+                    "configurados. Operação cancelada pelo usuário."
+                )
+            # Usuário decidiu contornar o bloqueio local.
+            available_models = models_to_try
+
+        for model in available_models:
             if call_id:
                 self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="start")
             try:

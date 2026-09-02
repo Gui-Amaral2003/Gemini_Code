@@ -178,6 +178,10 @@ def main():
                 print_history(chat)
                 continue
 
+            if user_input == '/quote':
+                print_quote(client)
+                continue
+
             if user_input == "/clear":
                 chat.clear_history()
                 console.print(Panel("Contexto limpo.", style=STYLE_SYSTEM, box=box.ROUNDED))
@@ -235,6 +239,7 @@ def print_banner() -> None:
         "[bold]Comandos[/bold]\n"
         "  [cyan]/help[/cyan]     mostra os comandos\n"
         "  [cyan]/history[/cyan]  mostra o histórico\n"
+        "  [cyan]/quote[/cyan]    mostra a cota diária estimada (RPD)\n"
         "  [cyan]/clear[/cyan]    limpa o contexto\n"
         "  [cyan]/tools[/cyan]    mostra as ferramentas, /tools <nome> para detalhes\n"
         "  [cyan]/think[/cyan]    liga/desliga a exibição do raciocínio do Gemini\n"
@@ -279,6 +284,7 @@ def print_help() -> None:
     table.add_row("/help", "Mostra esta ajuda")
     table.add_row("/history", "Mostra o histórico local")
     table.add_row("/clear", "Limpa a conversa")
+    table.add_row("/quote", "Mostra a cota diária estimada (RPD)")
     table.add_row("/tokens", "Mostra consumo de tokens")
     table.add_row("/tools", "Lista as ferramentas disponíveis, por categoria")
     table.add_row("/think", "Liga/desliga a exibição do raciocínio do Gemini")
@@ -427,6 +433,34 @@ def print_history(chat: ChatSession) -> None:
             )
         else:
             print_response(message.text)
+
+def print_quote(client: GeminiClient) -> None:
+    summary = client.quota.summary()
+
+    table = Table(box=box.SIMPLE_HEAVY)
+    table.add_column("Modelo", style="bold")
+    table.add_column("Usado hoje", justify="right")
+    table.add_column("Limite", justify="right")
+    table.add_column("Restante", justify="right", style=STYLE_ACCENT)
+
+    for item in summary:
+        restante_style = "bold red" if item["remaining"] == 0 else STYLE_ACCENT
+        table.add_row(
+            item["model"],
+            str(item["used"]),
+            str(item["limit"]),
+            Text(str(item["remaining"]), style=restante_style),
+        )
+
+    console.print(
+        Panel(
+            table,
+            title="Cota diária estimada (RPD)",
+            subtitle="[dim]Estimativa local — não é a cota real do Google[/dim]",
+            border_style=STYLE_ACCENT,
+            box=box.ROUNDED,
+        )
+    )
 
 def make_confirm_callback(status: Status):
     """

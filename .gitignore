@@ -226,6 +226,7 @@ gemini_cache.json
 gemini_usage_log.jsonl
 db_write_audit_log.jsonl
 gemini_trace_log.jsonl
+quota_tracker.json
 
 output/
 .vscode/
