@@ -65,11 +65,19 @@ Crie um arquivo `.env` na raiz do projeto:
 ```env
 GEMINI_API_KEY=sua_chave_aqui
 DB_CONN_STRING=sua_connection_string_aqui
+
+# Opcional — necessário apenas para usar as ferramentas Airflow
+AIRFLOW_API_URL=http://sua-vm:8080
+AIRFLOW_USERNAME=seu_usuario
+AIRFLOW_PASSWORD=sua_senha
 ```
 
 Uma chave Gemini gratuita pode ser obtida em [ai.google.dev](https://ai.google.dev/).
 
 `DB_CONN_STRING` é **opcional** — veja a seção abaixo antes de decidir se precisa dela.
+As variáveis `AIRFLOW_API_URL`, `AIRFLOW_USERNAME` e `AIRFLOW_PASSWORD` também
+são opcionais e só são necessárias para usar as ferramentas de monitoramento
+do Airflow.
 
 ### 4. Banco de dados: múltiplas conexões (SQL Server + Hive)
 
@@ -344,7 +352,7 @@ print(response.text)
 │   ├── script_safety.py        # Varredura estática de scripts antes da execução
 │   ├── database.py             # Leitura de tabelas pré-cadastradas (query_tableCat)
 │   ├── db_connections.py       # Catálogo de conexões e dialetos (SQL Server, Hive)
-│   ├── airflow_tools.py        # Monitoramento de DAGs via API v2 do Airflow
+│   ├── airflow_tool.py         # Monitoramento de DAGs via API v2 do Airflow
 │   ├── write_operations.py     # UPDATE/DELETE controlados, com confirmação e audit log
 │   ├── spreadsheet.py          # Leitura e busca em planilhas/CSV
 │   ├── data_analysis.py        # Agregação e análise de dados em planilhas e tabelas
@@ -617,7 +625,16 @@ AIRFLOW_USERNAME=seu_usuario
 AIRFLOW_PASSWORD=sua_senha
 ```
 
+Essas variáveis devem ser definidas no arquivo `.env` da raiz do projeto.
+O `GeminiClient` carrega esse arquivo automaticamente ao ser inicializado.
+Se você importar e chamar `tools.airflow_tool` diretamente, carregue o `.env`
+antes, por exemplo com `python-dotenv`:
+
 ```python
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from tools.airflow_tool import list_dags, get_dag_runs, get_task_log
 
 print(list_dags())
