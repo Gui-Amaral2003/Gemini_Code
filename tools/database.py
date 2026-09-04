@@ -132,13 +132,19 @@ def _quote_identifier(name: str, dialect_config: dict) -> str:
 
     return f"{open_quote}{name}{close_quote}"
 
-def _build_query(table: str, conditions: list[dict]):
+def _get_table_connection(table_config: dict) -> str:
+    """Resolve a conexao, mantendo compatibilidade com catalogos antigos."""
+    return table_config.get("connection", "sqlserver_main")
+
+
+def _build_query(table: str, conditions: list[dict]) -> tuple[str, list]:
     """
     Valida table + conditions contra o catálogo e monta uma query
     parametrizada, respeitando o dialeto da conexão cadastrada para essa
     tabela (quoting de identificador + posição do LIMIT/TOP).
  
-    Retorna (sql, params, connection_name)
+    Retorna (sql, params). A conexao continua sendo uma propriedade do
+    catalogo e e resolvida apenas no momento da execucao.
     """
     if table not in TABELAS_PERMITIDAS:
         raise QueryValidationError(
@@ -150,13 +156,12 @@ def _build_query(table: str, conditions: list[dict]):
     schema = config["schema"]
     colunas_filtro = config["colunas_filtro"]
     colunas_retorno = config['colunas_retorno']
-    connection_name = config["connection"]
- 
     _validate_identifier(schema, 'schema')
     _validate_identifier(table, 'tabela')
     for col in colunas_retorno:
         _validate_identifier(col, 'coluna de retorno')
  
+    connection_name = _get_table_connection(config)
     dialect_config = get_dialect_config(connection_name)
  
     where_clauses = []
@@ -183,7 +188,7 @@ def _build_query(table: str, conditions: list[dict]):
     if limit_style == "limit":
         sql += f" LIMIT {MAX_ROWS}"
  
-    return sql, params, connection_name
+    return sql, params
 
 def _execute_query(sql: str, params: list, connection_name: str, engine = None) -> tuple[Optional[pd.DataFrame], Optional[str]]:
     """
@@ -230,8 +235,9 @@ def fetch_table_dataframe(table: str, conditions: Optional[list[dict]] = None, e
     Retorna (df, error) — error já formatado para o modelo/usuário.
     """
     try:
-        sql, params, connection_name = _build_query(table, conditions or [])
-    except QueryValidationError as e:
+        sql, params = _build_query(table, conditions or [])
+        connection_name = _get_table_connection(TABELAS_PERMITIDAS[table])
+    except (QueryValidationError, ValueError) as e:
         return None, f"Requisição rejeitada: {e}"
 
     return _execute_query(sql, params, connection_name, engine=engine)

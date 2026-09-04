@@ -93,6 +93,7 @@ def make_client(tmp_path):
             usage_log_path=tmp_path / "usage.jsonl",
             trace_log_path=tmp_path / "trace.jsonl",
             cache_path=tmp_path / "cache.json",
+            quota_path=tmp_path / "quota.json",
             **kwargs,
         )
         gc.client = FakeGenAIClient(responses)

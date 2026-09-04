@@ -141,10 +141,12 @@ class GeminiClient:
         logger.info("Gemini solicitou ferramenta '%s' com argumentos: %s", tool_name, arguments)
 
         if tool_name not in TOOLS:
-            raise ValueError(
-                f"Ferramenta '{tool_name}' não está registrada. "
-                f"Disponíveis: {list(TOOLS)}"
-            )
+            return {
+                "error": (
+                    f"Ferramenta '{tool_name}' não está registrada. "
+                    f"Disponíveis: {list(TOOLS)}"
+                )
+            }
 
         function = TOOLS[tool_name]
 

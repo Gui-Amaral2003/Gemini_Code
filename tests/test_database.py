@@ -118,6 +118,44 @@ def test_build_query_bloqueia_coluna_de_retorno_com_identifier_invalido(monkeypa
 # fetch_table_dataframe / query_table — validação roda antes de qualquer I/O
 # --------------------------------------------------------------------------- #
 
+def test_build_query_hive_usa_crase_e_limit(monkeypatch):
+    monkeypatch.setitem(
+        database.TABELAS_PERMITIDAS,
+        "FAKE_HIVE_TABLE",
+        {
+            "connection": "hive_lake",
+            "schema": "analytics",
+            "colunas_filtro": {"id": "int"},
+            "colunas_retorno": ["id"],
+        },
+    )
+
+    sql, params = database._build_query(
+        "FAKE_HIVE_TABLE", [{"column": "id", "operator": ">", "value": "3"}]
+    )
+
+    assert sql == (
+        f"SELECT `id` FROM `analytics`.`FAKE_HIVE_TABLE` "
+        f"WHERE `id` > :param_0 LIMIT {database.MAX_ROWS}"
+    )
+    assert params == [3]
+
+
+def test_fetch_table_dataframe_encaminha_conexao_da_tabela(monkeypatch):
+    captured = {}
+
+    def fake_execute(sql, params, connection_name, engine=None):
+        captured["connection_name"] = connection_name
+        return "dataframe", None
+
+    monkeypatch.setattr(database, "_execute_query", fake_execute)
+
+    df, error = database.fetch_table_dataframe(TABELA, [])
+
+    assert (df, error) == ("dataframe", None)
+    assert captured["connection_name"] == "sqlserver_main"
+
+
 def _bloquear_get_engine(monkeypatch):
     """Faz get_engine() explodir se for chamada — usado para provar que o
     caminho de erro de validação nunca chega perto de tentar conectar."""
