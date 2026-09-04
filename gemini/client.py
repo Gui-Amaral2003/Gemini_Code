@@ -24,7 +24,7 @@ from .config import (
     RETRYABLE_ERRORS,
 )
 from .model_routing import all_terminal
-from .models import GeminiResponse
+from .models import ActivityEvent, GeminiResponse
 from .quota_tracker import QuotaTracker
 
 try:
@@ -87,6 +87,8 @@ class GeminiClient:
         self.max_retries = max_retries
         self.cache = PromptCache(cache_path) if use_cache else None
         self._thought_callback: Optional[Callable[[str], None]] = None
+        self._activity_callback: Optional[Callable[[ActivityEvent], None]] = None
+        self.last_activities: list[ActivityEvent] = []
         self.show_thoughts: bool = False
 
         self._session_input_tokens = 0
@@ -97,6 +99,22 @@ class GeminiClient:
         # Reiniciado a cada generate() — arquivos gerados por tools nesta chamada.
         self._current_generated_files: list[Path] = []
         self._created_files_this_session: set[Path] = set()
+
+    def _emit_activity(self, event_type: str, message: str, **kwargs) -> ActivityEvent:
+        """Registra um evento e o envia para a UI sem acoplar o cliente ao terminal."""
+        event = ActivityEvent(
+            type=event_type,
+            message=message,
+            timestamp=time.time(),
+            **kwargs,
+        )
+        self.last_activities.append(event)
+        if self._activity_callback:
+            try:
+                self._activity_callback(event)
+            except Exception:
+                logger.exception("Erro no callback de atividade; execucao continuara.")
+        return event
 
     def _process_thoughts(self, interaction) -> list[str]:
         """
@@ -137,10 +155,22 @@ class GeminiClient:
     def _execute_tool_call(self, step) -> object:
         tool_name = step.name
         arguments = step.arguments or {}
+        started_at = time.perf_counter()
+        self._emit_activity(
+            "tool_started",
+            f"Executando {tool_name}",
+            tool=tool_name,
+        )
 
         logger.info("Gemini solicitou ferramenta '%s' com argumentos: %s", tool_name, arguments)
 
         if tool_name not in TOOLS:
+            self._emit_activity(
+                "tool_failed",
+                f"Ferramenta {tool_name} nao registrada",
+                tool=tool_name,
+                duration=time.perf_counter() - started_at,
+            )
             return {
                 "error": (
                     f"Ferramenta '{tool_name}' não está registrada. "
@@ -156,6 +186,12 @@ class GeminiClient:
                 requested_path = Path(arguments.get("path", "")).resolve()
 
                 if requested_path not in self._created_files_this_session:
+                    self._emit_activity(
+                        "tool_failed",
+                        "Execucao de script bloqueada pela politica de seguranca",
+                        tool=tool_name,
+                        duration=time.perf_counter() - started_at,
+                    )
                     return {
                         "error": (
                             "Execução bloqueada. Só é permitido executar scripts "
@@ -166,6 +202,12 @@ class GeminiClient:
             result = function(**arguments)
 
             logger.info("Ferramenta '%s' executada com sucesso.", tool_name)
+            self._emit_activity(
+                "tool_completed",
+                f"Ferramenta {tool_name} concluida",
+                tool=tool_name,
+                duration=time.perf_counter() - started_at,
+            )
 
             # Registra arquivos criados pelo create_file
             if (tool_name == "create_file" and isinstance(result, dict) and result.get("success") and result.get("file_path")):
@@ -189,6 +231,12 @@ class GeminiClient:
 
         except Exception as e:
             logger.exception("Erro ao executar ferramenta '%s'.", tool_name)
+            self._emit_activity(
+                "tool_failed",
+                f"Falha em {tool_name}: {e}",
+                tool=tool_name,
+                duration=time.perf_counter() - started_at,
+            )
             return {"error": str(e)}
 
     def _is_rate_limit_error(self, error: Exception) -> bool:
@@ -215,6 +263,13 @@ class GeminiClient:
         last_error = None
 
         for attempt in range(max_retries + 1):
+            attempt_started_at = time.perf_counter()
+            self._emit_activity(
+                "api_attempt_started",
+                f"Consultando {model} (tentativa {attempt + 1})",
+                model=model,
+                details={"attempt": attempt + 1, "max_attempts": max_retries + 1},
+            )
             try:
                 create_kwargs = {
                     "model": model,
@@ -234,10 +289,24 @@ class GeminiClient:
 
 
                 interaction = self.client.interactions.create(**create_kwargs)
+                self._emit_activity(
+                    "api_attempt_completed",
+                    f"Resposta recebida de {model}",
+                    model=model,
+                    duration=time.perf_counter() - attempt_started_at,
+                    details={"attempt": attempt + 1},
+                )
                 return interaction
 
             except Exception as error:
                 last_error = error
+                self._emit_activity(
+                    "api_attempt_failed",
+                    f"Falha em {model}: {error}",
+                    model=model,
+                    duration=time.perf_counter() - attempt_started_at,
+                    details={"attempt": attempt + 1},
+                )
                 if not self._is_rate_limit_error(error):
                     raise
                 if attempt >= max_retries:
@@ -279,6 +348,11 @@ class GeminiClient:
         exhausted_models = [m for m in models_to_try if m not in available_models]
 
         if exhausted_models:
+            self._emit_activity(
+                "models_skipped",
+                "Modelos ignorados por cota local: " + ", ".join(exhausted_models),
+                details={"models": exhausted_models},
+            )
             logger.info(
                 "Modelo(s) com cota diária estimada esgotada, pulando: %s",
                 ", ".join(exhausted_models),
@@ -304,6 +378,12 @@ class GeminiClient:
             available_models = models_to_try
 
         for model in available_models:
+            self._emit_activity(
+                "model_selected",
+                f"Modelo selecionado: {model}",
+                model=model,
+                stage=stage,
+            )
             if call_id:
                 self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="start")
             try:
@@ -327,6 +407,12 @@ class GeminiClient:
                 if call_id:
                     self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="failure", error=str(error))
                 if self._is_rate_limit_error(error):
+                    self._emit_activity(
+                        "fallback_selected",
+                        f"Limite de {model}; tentando o proximo modelo",
+                        model=model,
+                        stage=stage,
+                    )
                     print(
                         f"[Gemini] {model} indisponível por limite de uso. "
                         "Tentando próximo modelo..."
@@ -346,6 +432,12 @@ class GeminiClient:
         biblioteca de terminal (mesmo padrão de confirm_action/set_confirm_callback).
         """
         self._thought_callback = callback
+
+    def set_activity_callback(
+        self, callback: Optional[Callable[[ActivityEvent], None]]
+    ) -> None:
+        """Registra o consumidor dos eventos operacionais de ``generate``."""
+        self._activity_callback = callback
 
     def set_thinking_enabled(self, enabled: bool) -> None:
         """
@@ -371,6 +463,9 @@ class GeminiClient:
         temperature: Optional[float] = None,
         use_cache: Optional[bool] = None,
     ) -> GeminiResponse:
+        generate_started_at = time.perf_counter()
+        self.last_activities = []
+        self._emit_activity("request_started", "Preparando solicitacao")
         if not prompt or not prompt.strip():
             raise ValueError("O prompt não pode ser vazio.")
 
@@ -394,6 +489,7 @@ class GeminiClient:
                     "Cache hit para processo '%s' — nenhuma chamada de API feita.",
                     process_name or "avulso",
                 )
+                self._emit_activity("cache_hit", "Resposta recuperada do cache")
                 response = GeminiResponse(
                     text=cached["text"],
                     input_tokens=0,
@@ -404,8 +500,18 @@ class GeminiClient:
                     process_name=process_name,
                     api_calls=0,
                     generated_files=[],
+                    activities=self.last_activities,
+                    duration=time.perf_counter() - generate_started_at,
+                    cached=True,
                     raw=None,
                 )
+                self._emit_activity(
+                    "response_completed",
+                    "Resposta concluida",
+                    model=response.model,
+                    duration=response.duration,
+                )
+                response.activities = list(self.last_activities)
                 self._log_usage(response, cached=True)
                 return response
 
@@ -488,6 +594,12 @@ class GeminiClient:
                     if self.cheap_model and all_terminal(tool_names_this_round):
                         next_model_preference = self.cheap_model
                         used_cheap_model = True
+                        self._emit_activity(
+                            "synthesis_started",
+                            f"Sintetizando resposta com {self.cheap_model}",
+                            model=self.cheap_model,
+                            stage="cheap_synthesis",
+                        )
 
                     prior_interaction_id = interaction.id
 
@@ -531,7 +643,20 @@ class GeminiClient:
                     api_calls=api_calls_made,
                     generated_files=list(self._current_generated_files),
                     thoughts=accumulated_thoughts,
+                    duration=time.perf_counter() - generate_started_at,
                 )
+
+                self._emit_activity(
+                    "response_completed",
+                    "Resposta concluida",
+                    model=response.model,
+                    duration=response.duration,
+                    details={
+                        "api_calls": response.api_calls,
+                        "total_tokens": response.total_tokens,
+                    },
+                )
+                response.activities = list(self.last_activities)
 
                 self._log_usage(response)
 
@@ -549,6 +674,7 @@ class GeminiClient:
 
             except genai_errors.ClientError as e:
                 logger.error(f"Erro de cliente (não vou tentar de novo): {e}")
+                self._emit_activity("request_failed", f"Solicitacao rejeitada: {e}")
                 raise
 
             except RETRYABLE_ERRORS as e:
@@ -558,8 +684,17 @@ class GeminiClient:
                         self.max_retries,
                         e,
                     )
+                    self._emit_activity(
+                        "request_failed",
+                        f"Solicitacao falhou apos {attempt} tentativa(s): {e}",
+                    )
                     raise
                 wait = 2 ** attempt
+                self._emit_activity(
+                    "request_retrying",
+                    f"Erro transitorio; nova tentativa em {wait}s",
+                    details={"attempt": attempt, "wait_seconds": wait},
+                )
                 logger.warning(
                     "Erro transitório (tentativa %d/%d): %s. Aguardando %ds...",
                     attempt,
@@ -581,6 +716,7 @@ class GeminiClient:
         api_calls: int = 1,
         generated_files: Optional[list[Path]] = None,
         thoughts: Optional[list[str]] = None,
+        duration: float = 0.0,
     ) -> GeminiResponse:
         return GeminiResponse(
             text=interaction.output_text,
@@ -593,6 +729,8 @@ class GeminiClient:
             api_calls=api_calls,
             generated_files=generated_files or [],
             thoughts=thoughts or [],
+            activities=list(self.last_activities),
+            duration=duration,
             raw=interaction,
         )
 

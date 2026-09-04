@@ -1,18 +1,11 @@
 ##TODO: 1. Testar tools de excel para planilhas grandes, verificar se o modelo vai chamar a read_sheet e não a preview_sheet 
-##TODO: 2. Usar para um caso generico, com o objetivo de testar a search_in_sheet
-##TODO: 3. Solicitar dados que não existe, para garantir que o modelo não vai invertar dados
 ##TODO: 4. Adicionar uma busca por arqruivos mais robusta
 ##TODO: 5. Testar o analyze_table_data
-##TODO: 6. Refinar a instrução sobre quando chamar plot_sheet_data/plot_table_data (evitar que o modelo gere gráfico quando o usuário só queria um número)
-##TODO: 7. Adicionar os tests para filesystem, database, pdf_reader e GeminiClient
 ##TODO: 8. Limpeza de arquivos
-##TODO: 9. Prosseguir com a criação dos tests
-##TODO 10. Testar economia gerada pelo model_routing
 ##TODO 11. Permitir escrita no modulo git, não apenas leitura
-##TODO 12. Corrigir loop infinito após o modelo chamar update_table/remove_table_rows
 from pathlib import Path
 import logging
-from gemini import GeminiClient, ChatSession
+from gemini import ActivityEvent, GeminiClient, ChatSession
 from tools.definitions import TOOL_DEFINITIONS
 from tools.confirmation import set_confirm_callback, set_confirm_typed_callback
 from rich.console import Console
@@ -158,6 +151,7 @@ def main():
     )
 
     print_banner()
+    trace_auto_enabled = False
 
     while True:
         try:
@@ -204,16 +198,35 @@ def main():
                 toggle_logs()
                 continue
 
+            if user_input == "/trace" or user_input.startswith("/trace "):
+                arg = user_input[len("/trace"):].strip().lower()
+                if not arg:
+                    print_trace(client.last_activities)
+                elif arg == "on":
+                    trace_auto_enabled = True
+                    print_system_message("Trace automático ativado.")
+                elif arg == "off":
+                    trace_auto_enabled = False
+                    print_system_message("Trace automático desativado.")
+                else:
+                    print_error("Uso: /trace, /trace on ou /trace off")
+                continue
+
             with Status("[dim]Gemini está pensando...[/dim]", console=console, spinner="dots") as status:
                 set_confirm_callback(make_confirm_callback(status))
                 set_confirm_typed_callback(make_confirm_typed_callback(status))
+                client.set_activity_callback(make_activity_callback(status))
                 try:
                     response = chat.send(user_input)
                 finally:
                     set_confirm_callback(None)
                     set_confirm_typed_callback(None)
+                    client.set_activity_callback(None)
 
             print_response(response.text)
+            if trace_auto_enabled:
+                print_trace(response.activities, compact=True)
+                print_response_footer(response)
 
             if response.generated_files:
                 handle_generated_files(response.generated_files)
@@ -245,6 +258,7 @@ def print_banner() -> None:
         "  [cyan]/think[/cyan]    liga/desliga a exibição do raciocínio do Gemini\n"
         "  [cyan]/logs[/cyan]     alterna visibilidade dos logs\n"
         "  [cyan]/tokens[/cyan]   mostra consumo\n"
+        "  [cyan]/trace[/cyan]    consulta ou ativa detalhes de execução\n"
         "  [cyan]/exit[/cyan]     sair"
     )
     console.print(
@@ -277,6 +291,10 @@ def print_error(message: str) -> None:
         )
     )
 
+
+def print_system_message(message: str) -> None:
+    console.print(Panel(message, style=STYLE_SYSTEM, box=box.ROUNDED))
+
 def print_help() -> None:
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
     table.add_column(style=f"{STYLE_ACCENT} bold")
@@ -286,6 +304,8 @@ def print_help() -> None:
     table.add_row("/clear", "Limpa a conversa")
     table.add_row("/quote", "Mostra a cota diária estimada (RPD)")
     table.add_row("/tokens", "Mostra consumo de tokens")
+    table.add_row("/trace", "Mostra modelos, ferramentas e tempos da última execução")
+    table.add_row("/trace on|off", "Liga/desliga timeline e rodapé automáticos")
     table.add_row("/tools", "Lista as ferramentas disponíveis, por categoria")
     table.add_row("/think", "Liga/desliga a exibição do raciocínio do Gemini")
     table.add_row("/logs", "Alterna visibilidade dos logs (visível por padrão)")
@@ -504,6 +524,70 @@ def make_thought_callback():
     def _on_thought(text: str) -> None:
         console.print(f"[{STYLE_THOUGHT}]💭 {text}[/{STYLE_THOUGHT}]")
     return _on_thought
+
+def make_activity_callback(status: Status):
+    """Atualiza o spinner conforme o cliente avança pelo fluxo operacional."""
+    def _on_activity(event: ActivityEvent) -> None:
+        status.update(f"[dim]{event.message}...[/dim]")
+
+    return _on_activity
+
+
+def _activity_icon(event: ActivityEvent) -> Text:
+    if event.type.endswith("failed"):
+        return Text("x", style="bold red")
+    if event.type in {"tool_completed", "api_attempt_completed", "response_completed", "cache_hit"}:
+        return Text("✓", style="bold green")
+    if event.type in {"fallback_selected", "models_skipped"}:
+        return Text("!", style="bold yellow")
+    return Text("•", style="dim")
+
+
+def print_trace(events: list[ActivityEvent], compact: bool = False) -> None:
+    """Renderiza o fluxo operacional da última chamada sem expor argumentos."""
+    if not events:
+        console.print(Panel("Nenhuma execução registrada.", style=STYLE_SYSTEM, box=box.ROUNDED))
+        return
+
+    visible_events = events
+    if compact:
+        visible_events = [
+            event for event in events
+            if event.type in {
+                "models_skipped", "model_selected", "api_attempt_failed",
+                "fallback_selected", "tool_started", "tool_completed",
+                "tool_failed", "synthesis_started", "cache_hit",
+            }
+        ]
+
+    table = Table(box=None, show_header=False, padding=(0, 1), expand=True)
+    table.add_column(width=1)
+    table.add_column(ratio=1)
+    table.add_column(justify="right", style="dim", no_wrap=True)
+
+    for event in visible_events:
+        duration = f"{event.duration:.2f}s" if event.duration is not None else ""
+        table.add_row(_activity_icon(event), event.message, duration)
+
+    console.print(
+        Panel(
+            table,
+            title="Execução" if compact else "Trace da última execução",
+            border_style="dim",
+            box=box.ROUNDED,
+        )
+    )
+
+
+def print_response_footer(response) -> None:
+    cache_status = "cache hit" if response.cached else "cache miss"
+    console.print(
+        Text(
+            f"  {response.model} · {response.api_calls} chamada(s) · "
+            f"{response.total_tokens} tokens · {response.duration:.2f}s · {cache_status}",
+            style="dim",
+        )
+    )
 
 def handle_generated_files(files: list[Path]) -> None:
     """Pergunta ao usuário, para cada arquivo gerado nesta resposta (ex: gráficos),

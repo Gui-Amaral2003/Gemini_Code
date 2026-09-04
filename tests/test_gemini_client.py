@@ -355,3 +355,51 @@ def test_cheap_model_requesting_more_tools_falls_back_to_strong_model(make_clien
     # mesmo resultado de tool que o modelo barato recebeu e não sintetizou
     assert calls[2]["previous_interaction_id"] == calls[1]["previous_interaction_id"] == "interaction-1"
     assert calls[2]["input"] == calls[1]["input"]
+
+
+def test_activity_callback_tracks_model_tool_and_completion(make_client, monkeypatch):
+    monkeypatch.setattr(client_module, "TOOLS", {"soma": lambda a, b: a + b})
+    tool_call = make_function_call_step("soma", {"a": 2, "b": 3})
+    first = make_interaction("interaction-1", steps=[tool_call], output_text="")
+    final = make_interaction("interaction-2", output_text="5")
+    gc = make_client([first, final])
+    captured = []
+    gc.set_activity_callback(captured.append)
+
+    response = gc.generate("some", use_cache=False)
+
+    event_types = [event.type for event in captured]
+    assert event_types[0] == "request_started"
+    assert "model_selected" in event_types
+    assert "tool_started" in event_types
+    assert "tool_completed" in event_types
+    assert event_types[-1] == "response_completed"
+    assert response.activities == captured
+    assert response.duration >= 0
+
+
+def test_cache_hit_is_visible_in_activity_trace(make_client):
+    interaction = make_interaction("interaction-1", output_text="cache")
+    gc = make_client([interaction])
+    gc.generate("repita", use_cache=True)
+
+    cached = gc.generate("repita", use_cache=True)
+
+    assert cached.cached is True
+    assert cached.api_calls == 0
+    assert [event.type for event in cached.activities] == [
+        "request_started",
+        "cache_hit",
+        "response_completed",
+    ]
+
+
+def test_activity_callback_failure_does_not_abort_request(make_client):
+    interaction = make_interaction("interaction-1", output_text="ok")
+    gc = make_client([interaction])
+    gc.set_activity_callback(lambda _event: (_ for _ in ()).throw(RuntimeError("UI falhou")))
+
+    response = gc.generate("teste", use_cache=False)
+
+    assert response.text == "ok"
+    assert response.activities[-1].type == "response_completed"

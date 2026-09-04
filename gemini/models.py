@@ -2,6 +2,19 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
+
+@dataclass
+class ActivityEvent:
+    """Evento observavel produzido durante uma chamada ao Gemini."""
+    type: str
+    message: str
+    timestamp: float
+    model: Optional[str] = None
+    tool: Optional[str] = None
+    stage: Optional[str] = None
+    duration: Optional[float] = None
+    details: dict = field(default_factory=dict)
+
 @dataclass
 class GeminiResponse:
     """Resposta normalizada de uma chamada ao Gemini."""
@@ -17,6 +30,9 @@ class GeminiResponse:
     generated_files: list[Path] = field(default_factory=list)
     # Pensamentos do modelo durante a geração da resposta.
     thoughts: list[str] = field(default_factory = list)
+    activities: list[ActivityEvent] = field(default_factory=list)
+    duration: float = 0.0
+    cached: bool = False
     raw: object = field(default=None, repr=False)
 
 @dataclass

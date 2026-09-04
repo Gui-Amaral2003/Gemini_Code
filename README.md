@@ -25,6 +25,7 @@ A biblioteca está organizada em um pacote Python dedicado em `gemini/`. O arqui
 - **Geração de gráficos**: cria gráficos de barra ou linha no terminal e salva PNGs temporários para aprovação do usuário
 - **Logging estruturado**: monitoramento de uso em arquivo JSONL
 - **Terminal interativo**: CLI com Rich para uso prático
+- **Rastreamento visual de execução**: acompanha seleção de modelos, tentativas, fallbacks, ferramentas e duração de cada resposta
 
 ---
 
@@ -221,6 +222,8 @@ Comandos disponíveis:
 - `/think` — liga ou desliga a exibição dos resumos de pensamento
 - `/logs` — alterna a visibilidade dos logs
 - `/tokens` — mostra o consumo de tokens da sessão
+- `/trace` — mostra as etapas e tempos da última execução sob demanda
+- `/trace on` / `/trace off` — liga ou desliga timeline e rodapé automáticos (desligados por padrão)
 - `/exit` — sai do terminal
 
 ### Usando ferramentas
