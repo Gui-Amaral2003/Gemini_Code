@@ -19,6 +19,8 @@ from rich.text import Text
 from rich.columns import Columns
 from rich.align import Align
 from rich import box
+from terminal_completer import build_prompt_session
+from prompt_toolkit.formatted_text import HTML
 
 DEFAULT_SESSION_ID = "default"
 PLOTS_DIR = Path("output") / "plots"
@@ -168,7 +170,8 @@ def main(argv=None):
 
     while True:
         try:
-            user_input = Prompt.ask(f"\n[{STYLE_USER}]Você[/{STYLE_USER}]").strip()
+            console.print()
+            user_input = prompt_session.prompt(HTML("<prompt>Você:</prompt> ")).strip()
 
             if not user_input:
                 continue
