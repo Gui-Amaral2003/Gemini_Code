@@ -4,6 +4,7 @@
 ##TODO: 8. Limpeza de arquivos
 ##TODO 11. Permitir escrita no modulo git, não apenas leitura
 ##TODO: 12. Adicionar suporte a /reindex, que atualiza os arquivos de autocomplete, para atualizar caso um arquivo ser criado após o terminal ser iniciado
+##TODO 14: Streaming da resposta final (síntese) via interactions.create(stream=True). Confirmado que a Interactions API suporta (ver ai.google.dev/gemini-api/docs/interactions/streaming).
 from pathlib import Path
 import argparse
 import logging
@@ -280,9 +281,9 @@ def main(argv=None):
                     client.set_activity_callback(None)
 
             print_response(response.text)
+            print_response_footer(response)
             if trace_auto_enabled:
                 print_trace(response.activities, compact=True)
-                print_response_footer(response)
 
             if response.generated_files:
                 handle_generated_files(response.generated_files)
@@ -365,7 +366,7 @@ def print_help() -> None:
     table.add_row("/quote", "Mostra a cota diária estimada (RPD)")
     table.add_row("/tokens", "Mostra consumo de tokens")
     table.add_row("/trace", "Mostra modelos, ferramentas e tempos da última execução")
-    table.add_row("/trace on|off", "Liga/desliga timeline e rodapé automáticos")
+    table.add_row("/trace on|off", "Liga/desliga timeline detalhada automática")
     table.add_row("/tools", "Lista as ferramentas disponíveis, por categoria")
     table.add_row("/think", "Liga/desliga a exibição do raciocínio do Gemini")
     table.add_row("/logs", "Alterna visibilidade dos logs (visível por padrão)")
