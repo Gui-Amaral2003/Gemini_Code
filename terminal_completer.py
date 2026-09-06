@@ -79,6 +79,11 @@ class FileNameCompleter(Completer):
     de busca de resolve_file_path, em tools/filesystem.py). O índice é
     montado uma vez na criação — arquivos criados/movidos depois só aparecem
     reiniciando o terminal.
+
+    TODO: comando /reindex para reconstruir o índice sem reiniciar o
+    terminal (reatribuir prompt_session.completer). Deixado de fora por
+    ora — escopo mínimo até confirmar que o índice congelado incomoda na
+    prática.
     """
     def __init__(self):
         self._index = self._scan()

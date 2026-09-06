@@ -3,6 +3,7 @@
 ##TODO: 5. Testar o analyze_table_data
 ##TODO: 8. Limpeza de arquivos
 ##TODO 11. Permitir escrita no modulo git, não apenas leitura
+##TODO: 12. Adicionar suporte a /reindex, que atualiza os arquivos de autocomplete, para atualizar caso um arquivo ser criado após o terminal ser iniciado
 from pathlib import Path
 import argparse
 import logging
