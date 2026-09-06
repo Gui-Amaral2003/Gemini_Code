@@ -4,6 +4,7 @@
 ##TODO: 8. Limpeza de arquivos
 ##TODO 11. Permitir escrita no modulo git, não apenas leitura
 from pathlib import Path
+import argparse
 import logging
 from gemini import ActivityEvent, GeminiClient, ChatSession
 from tools.definitions import TOOL_DEFINITIONS
@@ -19,7 +20,7 @@ from rich.columns import Columns
 from rich.align import Align
 from rich import box
 
-SESSION_ID = 'teste'
+DEFAULT_SESSION_ID = "default"
 PLOTS_DIR = Path("output") / "plots"
 
 # Gradiente clássico do ícone do Gemini (azul -> roxo -> rosa)
@@ -92,14 +93,26 @@ GEMINI_LOGGER_NAME = "gemini_client"
 LOG_LEVEL_VISIBLE = logging.INFO
 LOG_LEVEL_HIDDEN = logging.WARNING  # erros/avisos continuam aparecendo mesmo "oculto"
 
-def main():
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Cliente interativo do Gemini")
+    parser.add_argument(
+        "--session",
+        default=DEFAULT_SESSION_ID,
+        help=f"sessao a abrir (padrao: {DEFAULT_SESSION_ID})",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv=None):
+    args = parse_args(argv)
     logging.getLogger(GEMINI_LOGGER_NAME).setLevel(LOG_LEVEL_VISIBLE)
     client = GeminiClient(cheap_model = 'gemini-3.5-flash-lite')
     client.set_thought_callback(make_thought_callback())
+    prompt_session = build_prompt_session()
 
     chat = ChatSession(
         client = client,
-        session_id = SESSION_ID,
+        session_id = args.session,
         system_instruction = """
         Você é meu assistente técnico de programação.
         Responda de forma ojetiva e técnica. 
@@ -150,7 +163,7 @@ def main():
         """
     )
 
-    print_banner()
+    print_banner(chat.session_id)
     trace_auto_enabled = False
 
     while True:
@@ -170,6 +183,45 @@ def main():
 
             if user_input == "/history":
                 print_history(chat)
+                continue
+
+            if user_input == "/sessions":
+                print_sessions(chat)
+                continue
+
+            if user_input == "/new" or user_input.startswith("/new "):
+                session_id = user_input[len("/new "):].strip()
+                if not session_id:
+                    print_error("Uso: /new <nome>")
+                    continue
+                if ChatSession.session_exists(session_id, chat.sessions_path):
+                    print_error(f"A sessão '{session_id}' já existe. Use /switch {session_id}.")
+                    continue
+                chat = ChatSession(
+                    client=client,
+                    session_id=session_id,
+                    system_instruction=chat.system,
+                    sessions_path=chat.sessions_path,
+                )
+                chat.persist()
+                print_system_message(f"Nova sessão ativa: {chat.session_id}")
+                continue
+
+            if user_input == "/switch" or user_input.startswith("/switch "):
+                session_id = user_input[len("/switch "):].strip()
+                if not session_id:
+                    print_error("Uso: /switch <nome>")
+                    continue
+                if not ChatSession.session_exists(session_id, chat.sessions_path):
+                    print_error(f"Sessão '{session_id}' não encontrada. Use /sessions.")
+                    continue
+                chat = ChatSession(
+                    client=client,
+                    session_id=session_id,
+                    system_instruction=chat.system,
+                    sessions_path=chat.sessions_path,
+                )
+                print_system_message(f"Sessão ativa: {chat.session_id}")
                 continue
 
             if user_input == '/quote':
@@ -231,7 +283,7 @@ def main():
             if response.generated_files:
                 handle_generated_files(response.generated_files)
 
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, EOFError):
             console.print(Panel("Encerrando...", style=STYLE_SYSTEM, box=box.ROUNDED))
             break
 
@@ -243,15 +295,16 @@ def main():
 # Renderização
 # --------------------------------------------------------------------------- #
 
-def print_banner() -> None:
+def print_banner(session_id: str | None) -> None:
     console.print(Align.center(build_sparkle()))
 
     title = Text("Gemini Terminal", style=f"{STYLE_ACCENT} bold")
     body = Text.from_markup(
-        f"Sessão ativa: [{STYLE_ACCENT}]{SESSION_ID}[/{STYLE_ACCENT}]\n\n"
+        f"Sessão ativa: [{STYLE_ACCENT}]{session_id or 'temporária'}[/{STYLE_ACCENT}]\n\n"
         "[bold]Comandos[/bold]\n"
         "  [cyan]/help[/cyan]     mostra os comandos\n"
         "  [cyan]/history[/cyan]  mostra o histórico\n"
+        "  [cyan]/sessions[/cyan] lista e troca sessões persistidas\n"
         "  [cyan]/quote[/cyan]    mostra a cota diária estimada (RPD)\n"
         "  [cyan]/clear[/cyan]    limpa o contexto\n"
         "  [cyan]/tools[/cyan]    mostra as ferramentas, /tools <nome> para detalhes\n"
@@ -301,6 +354,9 @@ def print_help() -> None:
     table.add_column()
     table.add_row("/help", "Mostra esta ajuda")
     table.add_row("/history", "Mostra o histórico local")
+    table.add_row("/sessions", "Lista as sessões persistidas")
+    table.add_row("/new <nome>", "Cria e ativa uma nova sessão")
+    table.add_row("/switch <nome>", "Troca para uma sessão existente")
     table.add_row("/clear", "Limpa a conversa")
     table.add_row("/quote", "Mostra a cota diária estimada (RPD)")
     table.add_row("/tokens", "Mostra consumo de tokens")
@@ -453,6 +509,39 @@ def print_history(chat: ChatSession) -> None:
             )
         else:
             print_response(message.text)
+
+def print_sessions(chat: ChatSession) -> None:
+    sessions = ChatSession.list_sessions(chat.sessions_path)
+    if not sessions:
+        print_system_message("Nenhuma sessão persistida.")
+        return
+
+    table = Table(box=box.SIMPLE, expand=True)
+    table.add_column("Sessão", style="bold")
+    table.add_column("Mensagens", justify="right")
+    table.add_column("Atualizada", justify="right", style="dim")
+
+    for item in sessions:
+        is_active = item["session_id"] == chat.session_id
+        name = Text(item["session_id"])
+        if is_active:
+            name.append("  ativa", style="bold green")
+        table.add_row(
+            name,
+            str(item["messages"]),
+            item["updated_at"] or "desconhecido",
+        )
+
+    console.print(
+        Panel(
+            table,
+            title="Sessões",
+            subtitle="[dim]/new <nome> ou /switch <nome>[/dim]",
+            border_style=STYLE_ACCENT,
+            box=box.ROUNDED,
+        )
+    )
+
 
 def print_quote(client: GeminiClient) -> None:
     summary = client.quota.summary()

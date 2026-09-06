@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 from pathlib import Path
 from typing import Optional
 
@@ -34,13 +35,72 @@ class ChatSession:
     ):
         self.client = client
         self.system = system_instruction
-        self.session_id = session_id
+        self.session_id = (
+            self.validate_session_id(session_id) if session_id is not None else None
+        )
         self.sessions_path = Path(sessions_path)
         self.messages: list[Message] = []
         self._last_interaction_id: Optional[str] = None
 
         if self.session_id:
             self._load()
+
+    @staticmethod
+    def validate_session_id(session_id: str) -> str:
+        """Normaliza um nome de sessao e rejeita valores dificeis de exibir."""
+        normalized = session_id.strip()
+        if not normalized:
+            raise ValueError("O nome da sessao nao pode ser vazio.")
+        if len(normalized) > 80:
+            raise ValueError("O nome da sessao deve ter no maximo 80 caracteres.")
+        if any(ord(char) < 32 for char in normalized):
+            raise ValueError("O nome da sessao nao pode conter caracteres de controle.")
+        return normalized
+
+    @classmethod
+    def list_sessions(cls, sessions_path: Path | str = DEFAULT_SESSIONS_PATH) -> list[dict]:
+        """Lista sessoes persistidas, das mais recentes para as mais antigas."""
+        path = Path(sessions_path)
+        if not path.exists():
+            return []
+        try:
+            with open(path, encoding="utf-8") as f:
+                saved_sessions = json.load(f)
+        except (json.JSONDecodeError, OSError) as e:
+            logger.warning("Nao consegui listar sessoes em %s: %s", path, e)
+            return []
+        if not isinstance(saved_sessions, dict):
+            return []
+
+        sessions = [
+            {
+                "session_id": session_id,
+                "messages": len(data.get("messages", [])) if isinstance(data, dict) else 0,
+                "updated_at": data.get("updated_at") if isinstance(data, dict) else None,
+            }
+            for session_id, data in saved_sessions.items()
+        ]
+        return sorted(
+            sessions,
+            key=lambda item: item["updated_at"] or "",
+            reverse=True,
+        )
+
+    @classmethod
+    def session_exists(
+        cls, session_id: str, sessions_path: Path | str = DEFAULT_SESSIONS_PATH
+    ) -> bool:
+        normalized = cls.validate_session_id(session_id)
+        return any(
+            item["session_id"] == normalized
+            for item in cls.list_sessions(sessions_path)
+        )
+
+    def persist(self) -> None:
+        """Cria ou atualiza no disco inclusive uma sessao ainda vazia."""
+        if not self.session_id:
+            raise ValueError("Uma sessao sem nome nao pode ser persistida.")
+        self._save()
 
     def send(self, user_message: str, **kwargs) -> GeminiResponse:
         """Envia uma mensagem e recebe a resposta, mantendo o histórico."""
@@ -111,9 +171,11 @@ class ChatSession:
         all_sessions[self.session_id] = {
             "last_interaction_id": self._last_interaction_id,
             "messages": [{"role": m.role, "text": m.text} for m in self.messages],
+            "updated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
 
         try:
+            self.sessions_path.parent.mkdir(parents=True, exist_ok=True)
             with open(self.sessions_path, "w", encoding="utf-8") as f:
                 json.dump(all_sessions, f, ensure_ascii=False, indent=2)
         except OSError as e:

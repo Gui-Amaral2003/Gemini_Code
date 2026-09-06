@@ -158,6 +158,12 @@ apontando para o dialeto existente.
 python gemini_terminal.py
 ```
 
+Para abrir diretamente uma sessão específica:
+
+```bash
+python gemini_terminal.py --session trabalho
+```
+
 ---
 
 ## 💡 Importando o pacote
@@ -216,6 +222,9 @@ python gemini_terminal.py
 Comandos disponíveis:
 - `/help` — mostra a ajuda completa
 - `/history` — mostra o histórico local da sessão
+- `/sessions` — lista as sessões persistidas e destaca a atual
+- `/new <nome>` — cria e ativa uma sessão vazia
+- `/switch <nome>` — troca para uma sessão existente
 - `/clear` — limpa o contexto e desvincula a conversa anterior
 - `/tools` — lista as ferramentas por categoria
 - `/tools <nome>` — mostra a descrição detalhada de uma ferramenta
