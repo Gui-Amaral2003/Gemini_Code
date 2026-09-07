@@ -313,10 +313,11 @@ class GeminiClient:
                     raise
 
                 delay = min(2 ** attempt, 10) + random.uniform(0, 0.5)
-                print(
-                    f"[Gemini] Modelo {model} atingiu limite. "
-                    f"Tentativa {attempt + 1}/{max_retries}. "
-                    f"Aguardando {delay:.2f}s..."
+                self._emit_activity(
+                    "rate_limit_backoff",
+                    f"Limite atingido em {model}; aguardando {delay:.2f}s antes de tentar de novo",
+                    model=model,
+                    duration=delay,
                 )
                 time.sleep(delay)
 
@@ -387,7 +388,6 @@ class GeminiClient:
             if call_id:
                 self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="start")
             try:
-                print(f"[Gemini] Tentando modelo: {model}")
                 interaction = self._create_interaction(
                     model=model,
                     input=input,
@@ -396,7 +396,6 @@ class GeminiClient:
                     system_instruction=system_instruction,
                     generation_config=generation_config,
                 )
-                print(f"[Gemini] Modelo utilizado: {model}")
 
                 if call_id:
                     self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="success")
@@ -412,10 +411,6 @@ class GeminiClient:
                         f"Limite de {model}; tentando o proximo modelo",
                         model=model,
                         stage=stage,
-                    )
-                    print(
-                        f"[Gemini] {model} indisponível por limite de uso. "
-                        "Tentando próximo modelo..."
                     )
                     continue
                 raise

@@ -22,6 +22,7 @@ from rich.columns import Columns
 from rich.align import Align
 from rich import box
 from terminal_completer import build_prompt_session
+from terminal_timeline import ToolTimeline
 from prompt_toolkit.formatted_text import HTML
 
 DEFAULT_SESSION_ID = "default"
@@ -172,7 +173,6 @@ def main(argv=None):
 
     while True:
         try:
-            console.print()
             user_input = prompt_session.prompt(HTML("<prompt>Você:</prompt> ")).strip()
 
             if not user_input:
@@ -269,16 +269,18 @@ def main(argv=None):
                     print_error("Uso: /trace, /trace on ou /trace off")
                 continue
 
-            with Status("[dim]Gemini está pensando...[/dim]", console=console, spinner="dots") as status:
-                set_confirm_callback(make_confirm_callback(status))
-                set_confirm_typed_callback(make_confirm_typed_callback(status))
-                client.set_activity_callback(make_activity_callback(status))
-                try:
-                    response = chat.send(user_input)
-                finally:
-                    set_confirm_callback(None)
-                    set_confirm_typed_callback(None)
-                    client.set_activity_callback(None)
+            timeline = ToolTimeline(console)
+            timeline.start()
+            set_confirm_callback(make_confirm_callback(timeline))
+            set_confirm_typed_callback(make_confirm_typed_callback(timeline))
+            client.set_activity_callback(timeline.handle_event)
+            try:
+                response = chat.send(user_input)
+            finally:
+                timeline.stop()
+                set_confirm_callback(None)
+                set_confirm_typed_callback(None)
+                client.set_activity_callback(None)
 
             print_response(response.text)
             print_response_footer(response)
@@ -326,16 +328,9 @@ def print_banner(session_id: str | None) -> None:
     )
 
 def print_response(text: str) -> None:
-    console.print(
-        Panel(
-            Markdown(text),
-            title=Text("Gemini", style=STYLE_GEMINI),
-            title_align="left",
-            border_style=STYLE_GEMINI,
-            box=box.ROUNDED,
-            padding=(1, 2),
-        )
-    )
+    console.print(Text("Gemini", style=f"{STYLE_GEMINI} bold"))
+    console.print(Markdown(text))
+    console.print()
 
 
 def print_error(message: str) -> None:
@@ -618,14 +613,6 @@ def make_thought_callback():
     def _on_thought(text: str) -> None:
         console.print(f"[{STYLE_THOUGHT}]💭 {text}[/{STYLE_THOUGHT}]")
     return _on_thought
-
-def make_activity_callback(status: Status):
-    """Atualiza o spinner conforme o cliente avança pelo fluxo operacional."""
-    def _on_activity(event: ActivityEvent) -> None:
-        status.update(f"[dim]{event.message}...[/dim]")
-
-    return _on_activity
-
 
 def _activity_icon(event: ActivityEvent) -> Text:
     if event.type.endswith("failed"):
