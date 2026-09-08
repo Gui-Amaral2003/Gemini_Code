@@ -5,6 +5,7 @@
 ##TODO 11. Permitir escrita no modulo git, não apenas leitura
 ##TODO: 12. Adicionar suporte a /reindex, que atualiza os arquivos de autocomplete, para atualizar caso um arquivo ser criado após o terminal ser iniciado
 ##TODO 14: Streaming da resposta final (síntese) via interactions.create(stream=True). Confirmado que a Interactions API suporta (ver ai.google.dev/gemini-api/docs/interactions/streaming).
+##TODO: 14: Corrigir o visual quando o terminal é iniciado. Remover os comandos e deixar essa função exclusiva para o /help
 from pathlib import Path
 import argparse
 import logging

@@ -44,3 +44,6 @@ requests>=2.31.0
 # Driver Hive (conex~eos via SQLAlchemy, auth LDAP)
 pyhive[hive]>=0.7.0
 thrift>=0.16.0
+
+# Timeout de chamadas HTTP ao Gemini — usado diretamente para capturar httpx.TimeoutException/RemoteProtocolError (dependência transitiva do google-genai, mas usada explicitamente agora, então vira direta).
+httpx>=0.27.0

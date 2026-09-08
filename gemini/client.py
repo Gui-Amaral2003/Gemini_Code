@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import httpx
 import uuid
 import json
 import logging
@@ -10,12 +11,16 @@ from typing import Optional, Callable
 
 from google import genai
 from google.genai import errors as genai_errors
+from google.genai import types
 
 from tools import TOOL_DEFINITIONS, TOOLS
 from tools.confirmation import confirm_action
 
 from .cache import PromptCache
 from .config import (
+    DEFAULT_API_CALL_TIMEOUT_SECONDS,
+    MAX_TOOL_ROUNDS,
+    MAX_GENERATE_SECONDS,
     DEFAULT_CACHE_PATH,
     DEFAULT_MODEL,
     DEFAULT_TRACE_LOG_PATH,
@@ -23,6 +28,7 @@ from .config import (
     DEFAULT_QUOTA_PATH,
     RETRYABLE_ERRORS,
 )
+from .exceptions import GeminiTimeoutError
 from .model_routing import all_terminal
 from .models import ActivityEvent, GeminiResponse
 from .quota_tracker import QuotaTracker
@@ -44,6 +50,12 @@ logger.setLevel(logging.INFO)
 # Tools cujo retorno pode conter um arquivo gerado (ex: PNG de gráfico) a ser propagado até quem consome o GeminiResponse (ex: gemini_terminal.py decide se mantém ou descarta o arquivo).
 PLOT_TOOL_NAMES = {"plot_sheet_data", "plot_table_data"}
 
+# httpx.TimeoutException cobre ReadTimeout/ConnectTimeout/WriteTimeout/PoolTimeout.
+# RemoteProtocolError entra porque, na prática (relatos do próprio fórum do
+# Gemini), um timeout de servidor às vezes aparece como "server disconnected
+# without sending a response" em vez de uma exceção de timeout limpa — mesma
+# causa raiz, tratamento igual (não retenta, mensagem clara).
+_TIMEOUT_HTTP_ERRORS = (httpx.TimeoutException, httpx.RemoteProtocolError)
 
 class GeminiClient:
     """
@@ -67,11 +79,26 @@ class GeminiClient:
         fallback_models: Optional[list[str]] = None,
         cheap_model: Optional[str] = None,
     ):
-        self.client = genai.Client(api_key=api_key) if api_key else genai.Client()
+        self.client = (
+            genai.Client(
+                api_key=api_key,
+                http_options=types.HttpOptions(
+                    timeout=DEFAULT_API_CALL_TIMEOUT_SECONDS * 1000  # HttpOptions é em ms
+                ),
+            )
+            if api_key
+            else genai.Client(
+                http_options=types.HttpOptions(
+                    timeout=DEFAULT_API_CALL_TIMEOUT_SECONDS * 1000
+                )
+            )
+        )
         self.default_model = default_model
         self.cheap_model = cheap_model
         self.fallback_models = fallback_models or [
+            "gemini-3.7-flash",
             "gemini-3.6-flash",
+            "gemini-3.5-flash",
             "gemini-3.5-flash-lite",
             "gemini-3-flash",
             "gemini-3.1-flash-lite",
@@ -276,6 +303,7 @@ class GeminiClient:
                     "input": input,
                     "tools": tools,
                     "previous_interaction_id": previous_interaction_id,
+                    'timeout': DEFAULT_API_CALL_TIMEOUT_SECONDS,  # timeout por chamada em segundos
                 }
 
                 if system_instruction is not None:
@@ -307,6 +335,15 @@ class GeminiClient:
                     duration=time.perf_counter() - attempt_started_at,
                     details={"attempt": attempt + 1},
                 )
+
+                if isinstance(error, _TIMEOUT_HTTP_ERRORS):
+                    raise GeminiTimeoutError(
+                        f"A chamada a {model} excedeu o timeout configurado "
+                        f"({DEFAULT_API_CALL_TIMEOUT_SECONDS}s) ou a conexão foi "
+                        "interrompida pelo servidor antes de responder. Nenhuma "
+                        "nova tentativa automática será feita."
+                    ) from error
+                
                 if not self._is_rate_limit_error(error):
                     raise
                 if attempt >= max_retries:
@@ -524,6 +561,8 @@ class GeminiClient:
             attempt += 1
             # Reinicia o rastreamento de arquivos gerados a cada tentativa — se essa tentativa falhar e for reexecutada, não queremos arrastar arquivos órfãos de uma tentativa anterior que não chegou a completar.
             self._current_generated_files = []
+            tool_rounds = 0
+            budget_window_started_at = time.perf_counter()
             try:
                 accumulated_input_tokens = 0
                 accumulated_output_tokens = 0
@@ -581,6 +620,12 @@ class GeminiClient:
                                     }
                                 ],
                             }
+                        )
+
+                        tool_rounds += 1
+                        budget_window_started_at = self._check_generation_budget(
+                            window_started_at=budget_window_started_at,
+                            tool_rounds=tool_rounds
                         )
 
                     # Roteamento multi-modelo: se TODAS as tools chamadas nesta rodada forem "terminais" (ver gemini/model_routing.py), a próxima chamada é candidata a rodar no modelo barato — o próximo passo esperado é sintetizar a resposta final, não decidir mais tool calls.
@@ -728,6 +773,60 @@ class GeminiClient:
             duration=duration,
             raw=interaction,
         )
+
+    def _check_generation_budget(self, *, window_started_at: float, tool_rounds: int) -> float:
+        """
+        Checkpoint cooperativo de orçamento (tempo + rodadas de tool-calling),
+        chamado só ENTRE rodadas — nunca no meio da execução de uma tool, para
+        não arriscar interromper um update_table/edit_repo_file a meio caminho
+        (quebraria a invariante de reversão segura dessas ferramentas).
+
+        Se MAX_GENERATE_SECONDS e/ou MAX_TOOL_ROUNDS foi excedido, pergunta ao
+        usuário (s/N) se quer continuar mesmo assim — mesmo padrão já usado
+        para cota diária esgotada em _create_with_fallback. Se recusar,
+        levanta GeminiTimeoutError (nunca retentada automaticamente).
+
+        Se confirmado, ESTENDE a janela de tempo (reinicia window_started_at)
+        mas NÃO reseta tool_rounds — um "sim" dá mais tempo, não um cheque em
+        branco: se a conversa continuar gastando rodadas, o limite de rounds
+        ainda vai perguntar de novo.
+        """
+        elapsed = time.perf_counter() - window_started_at
+        dentro_do_tempo = elapsed <= MAX_GENERATE_SECONDS
+        dentro_das_rodadas = tool_rounds <= MAX_TOOL_ROUNDS
+
+        if dentro_do_tempo and dentro_das_rodadas:
+            return window_started_at
+
+        motivos = []
+        if not dentro_do_tempo:
+            motivos.append(f"{elapsed:.0f}s decorridos (limite: {MAX_GENERATE_SECONDS}s)")
+        if not dentro_das_rodadas:
+            motivos.append(f"{tool_rounds} rodada(s) de ferramentas (limite: {MAX_TOOL_ROUNDS})")
+
+        mensagem = (
+            "⚠ Esta resposta excedeu o orçamento configurado: "
+            + "; ".join(motivos)
+            + ".\n\nContinuar mesmo assim?"
+        )
+
+        self._emit_activity(
+            'budget_exceeded',
+            mensagem,
+            details = {'elapsed': elapsed, 'tool_rounds': tool_rounds}
+        )
+
+        if not confirm_action(mensagem):
+            raise GeminiTimeoutError(
+                f"Orçamento de geração excedido ({'; '.join(motivos)}). "
+                "Nenhuma nova tentativa automática será feita."
+            )
+
+        self._emit_activity(
+            'budget_extended',
+            "Orçamento estendido pelo usuário; contagem de rodadas mantidas",
+        )
+        return time.perf_counter()  # reinicia a contagem de tempo, mas não reseta tool_rounds
 
     def _log_trace_attempt(self, *, call_id: str, stage: str, model: str, phase: str, error: Optional[str] = None) -> None:
         """
