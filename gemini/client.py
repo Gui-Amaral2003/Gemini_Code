@@ -20,7 +20,6 @@ from .cache import PromptCache
 from .config import (
     DEFAULT_API_CALL_TIMEOUT_SECONDS,
     MAX_TOOL_ROUNDS,
-    MAX_GENERATE_SECONDS,
     DEFAULT_CACHE_PATH,
     DEFAULT_MODEL,
     DEFAULT_TRACE_LOG_PATH,
@@ -562,7 +561,7 @@ class GeminiClient:
             # Reinicia o rastreamento de arquivos gerados a cada tentativa — se essa tentativa falhar e for reexecutada, não queremos arrastar arquivos órfãos de uma tentativa anterior que não chegou a completar.
             self._current_generated_files = []
             tool_rounds = 0
-            budget_window_started_at = time.perf_counter()
+            tool_round_limit = MAX_TOOL_ROUNDS
             try:
                 accumulated_input_tokens = 0
                 accumulated_output_tokens = 0
@@ -597,6 +596,12 @@ class GeminiClient:
                     if not function_calls:
                         break
 
+                    tool_rounds += 1
+                    tool_round_limit = self._check_tool_round_budget(
+                        tool_rounds=tool_rounds,
+                        current_limit=tool_round_limit,
+                    )
+
                     logger.info("Gemini solicitou %d ferramenta(s).", len(function_calls))
                     function_results = []
                     tool_names_this_round = []
@@ -620,12 +625,6 @@ class GeminiClient:
                                     }
                                 ],
                             }
-                        )
-
-                        tool_rounds += 1
-                        budget_window_started_at = self._check_generation_budget(
-                            window_started_at=budget_window_started_at,
-                            tool_rounds=tool_rounds
                         )
 
                     # Roteamento multi-modelo: se TODAS as tools chamadas nesta rodada forem "terminais" (ver gemini/model_routing.py), a próxima chamada é candidata a rodar no modelo barato — o próximo passo esperado é sintetizar a resposta final, não decidir mais tool calls.
@@ -774,59 +773,35 @@ class GeminiClient:
             raw=interaction,
         )
 
-    def _check_generation_budget(self, *, window_started_at: float, tool_rounds: int) -> float:
-        """
-        Checkpoint cooperativo de orçamento (tempo + rodadas de tool-calling),
-        chamado só ENTRE rodadas — nunca no meio da execução de uma tool, para
-        não arriscar interromper um update_table/edit_repo_file a meio caminho
-        (quebraria a invariante de reversão segura dessas ferramentas).
-
-        Se MAX_GENERATE_SECONDS e/ou MAX_TOOL_ROUNDS foi excedido, pergunta ao
-        usuário (s/N) se quer continuar mesmo assim — mesmo padrão já usado
-        para cota diária esgotada em _create_with_fallback. Se recusar,
-        levanta GeminiTimeoutError (nunca retentada automaticamente).
-
-        Se confirmado, ESTENDE a janela de tempo (reinicia window_started_at)
-        mas NÃO reseta tool_rounds — um "sim" dá mais tempo, não um cheque em
-        branco: se a conversa continuar gastando rodadas, o limite de rounds
-        ainda vai perguntar de novo.
-        """
-        elapsed = time.perf_counter() - window_started_at
-        dentro_do_tempo = elapsed <= MAX_GENERATE_SECONDS
-        dentro_das_rodadas = tool_rounds <= MAX_TOOL_ROUNDS
-
-        if dentro_do_tempo and dentro_das_rodadas:
-            return window_started_at
-
-        motivos = []
-        if not dentro_do_tempo:
-            motivos.append(f"{elapsed:.0f}s decorridos (limite: {MAX_GENERATE_SECONDS}s)")
-        if not dentro_das_rodadas:
-            motivos.append(f"{tool_rounds} rodada(s) de ferramentas (limite: {MAX_TOOL_ROUNDS})")
+    def _check_tool_round_budget(self, *, tool_rounds: int, current_limit: int) -> int:
+        """Impede loops de tools sem cronometrar ou interromper uma ferramenta."""
+        if tool_rounds <= current_limit:
+            return current_limit
 
         mensagem = (
-            "⚠ Esta resposta excedeu o orçamento configurado: "
-            + "; ".join(motivos)
-            + ".\n\nContinuar mesmo assim?"
+            f"⚠ Esta resposta atingiu {tool_rounds} rodadas de ferramentas "
+            f"(limite: {current_limit}).\n\nContinuar mesmo assim?"
         )
-
         self._emit_activity(
             'budget_exceeded',
+            "budget_exceeded",
             mensagem,
-            details = {'elapsed': elapsed, 'tool_rounds': tool_rounds}
+            details={"tool_rounds": tool_rounds, "tool_round_limit": current_limit},
         )
 
         if not confirm_action(mensagem):
             raise GeminiTimeoutError(
-                f"Orçamento de geração excedido ({'; '.join(motivos)}). "
+                f"Limite de {current_limit} rodadas de ferramentas excedido. "
                 "Nenhuma nova tentativa automática será feita."
             )
 
+        extended_limit = current_limit + MAX_TOOL_ROUNDS
         self._emit_activity(
-            'budget_extended',
-            "Orçamento estendido pelo usuário; contagem de rodadas mantidas",
+            "budget_extended",
+            f"Limite estendido pelo usuário para {extended_limit} rodadas",
+            details={"tool_rounds": tool_rounds, "tool_round_limit": extended_limit},
         )
-        return time.perf_counter()  # reinicia a contagem de tempo, mas não reseta tool_rounds
+        return extended_limit
 
     def _log_trace_attempt(self, *, call_id: str, stage: str, model: str, phase: str, error: Optional[str] = None) -> None:
         """

@@ -1,7 +1,7 @@
 # Gemini Client - Dependências
 
 # Google Gemini API
-google-genai>=0.4.0
+google-genai>=2.4.0
 
 # Interface de terminal com formatação
 rich>=13.0.0

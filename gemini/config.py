@@ -25,22 +25,18 @@ DEFAULT_QUOTA_PATH = Path('gemini/quota_tracker.json')
 #      em MILISSEGUNDOS) quanto por chamada (interactions.create(timeout=...),
 #      em SEGUNDOS — atenção à diferença de unidade). NÃO é garantia: há
 #      issues abertas no SDK (googleapis/python-genai #911, #1330, #4031)
-#      onde esse timeout não é respeitado em certos paths internos. Por isso
-#      as camadas 2 e 3 não são "extra", são a proteção real.
+#      onde esse timeout não é respeitado em certos paths internos.
 #   2. MAX_TOOL_ROUNDS — limite de rodadas de tool-calling numa mesma
-#      chamada a generate(). Cobre o modelo pedindo ferramentas indefinidamente.
-#   3. MAX_GENERATE_SECONDS — orçamento de tempo total de um generate(),
-#      checado de forma COOPERATIVA (só entre rodadas de tool-calling, nunca
-#      no meio da execução de uma tool) — matar a execução à força no meio
-#      de um update_table/edit_repo_file quebraria a invariante de reversão
-#      segura dessas ferramentas.
+#      chamada a generate(). Cobre o modelo pedindo ferramentas indefinidamente
+#      sem cronometrar nem interromper a execução de uma tool. Cada ferramenta
+#      deve controlar seu próprio timeout conforme a operação e suas garantias
+#      de consistência (transação, rollback, idempotência etc.).
 #
-# Ambos os limites (2 e 3) podem ser contornados via confirmação explícita
-# do usuário (ver GeminiClient._check_generation_budget) — mesmo padrão já
-# usado para cota diária esgotada.
+# O limite de rodadas pode ser estendido via confirmação explícita do usuário
+# (ver GeminiClient._check_tool_round_budget) — mesmo padrão já usado para cota
+# diária esgotada.
 #
 # Valores abaixo são placeholder — mesmo status do RATE_LIMITS_RPD em
 # quota_tracker.py: ajustar com uso real antes de confiar cegamente.
 DEFAULT_API_CALL_TIMEOUT_SECONDS = 200
 MAX_TOOL_ROUNDS = 10
-MAX_GENERATE_SECONDS = 300

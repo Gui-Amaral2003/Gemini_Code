@@ -5,6 +5,7 @@ import pytest
 
 import gemini.client as client_module
 from gemini.client import GeminiClient
+from gemini.exceptions import GeminiTimeoutError
 
 
 # --------------------------------------------------------------------------- #
@@ -403,3 +404,74 @@ def test_activity_callback_failure_does_not_abort_request(make_client):
 
     assert response.text == "ok"
     assert response.activities[-1].type == "response_completed"
+
+
+def test_tool_limit_counts_rounds_instead_of_individual_calls(make_client, monkeypatch):
+    executed = []
+
+    def fake_tool(value):
+        executed.append(value)
+        return value
+
+    monkeypatch.setattr(client_module, "MAX_TOOL_ROUNDS", 1)
+    monkeypatch.setattr(client_module, "TOOLS", {"fake_tool": fake_tool})
+    monkeypatch.setattr(
+        client_module,
+        "confirm_action",
+        lambda _message: pytest.fail("uma única rodada não deve pedir confirmação"),
+    )
+    first = make_interaction(
+        "interaction-1",
+        steps=[
+            make_function_call_step("fake_tool", {"value": 1}, call_id="call-1"),
+            make_function_call_step("fake_tool", {"value": 2}, call_id="call-2"),
+        ],
+    )
+    final = make_interaction("interaction-2", output_text="concluído")
+    gc = make_client([first, final])
+
+    response = gc.generate("execute as ferramentas", use_cache=False)
+
+    assert response.text == "concluído"
+    assert executed == [1, 2]
+
+
+def test_tool_limit_is_checked_before_executing_next_round(make_client, monkeypatch):
+    executed = []
+
+    def fake_tool(value):
+        executed.append(value)
+        return value
+
+    monkeypatch.setattr(client_module, "MAX_TOOL_ROUNDS", 1)
+    monkeypatch.setattr(client_module, "TOOLS", {"fake_tool": fake_tool})
+    monkeypatch.setattr(client_module, "confirm_action", lambda _message: False)
+    first = make_interaction(
+        "interaction-1",
+        steps=[make_function_call_step("fake_tool", {"value": 1}, call_id="call-1")],
+    )
+    second = make_interaction(
+        "interaction-2",
+        steps=[make_function_call_step("fake_tool", {"value": 2}, call_id="call-2")],
+    )
+    gc = make_client([first, second])
+
+    with pytest.raises(GeminiTimeoutError, match="1 rodadas"):
+        gc.generate("continue chamando ferramentas", use_cache=False)
+
+    assert executed == [1]
+    assert [event.type for event in gc.last_activities][-1] == "budget_exceeded"
+
+
+def test_confirming_tool_limit_extends_it_by_a_full_block(make_client, monkeypatch):
+    monkeypatch.setattr(client_module, "MAX_TOOL_ROUNDS", 10)
+    monkeypatch.setattr(client_module, "confirm_action", lambda _message: True)
+    gc = make_client([])
+
+    extended_limit = gc._check_tool_round_budget(tool_rounds=11, current_limit=10)
+
+    assert extended_limit == 20
+    assert [event.type for event in gc.last_activities] == [
+        "budget_exceeded",
+        "budget_extended",
+    ]
