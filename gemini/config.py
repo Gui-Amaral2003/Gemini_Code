@@ -40,3 +40,4 @@ DEFAULT_QUOTA_PATH = Path('gemini/quota_tracker.json')
 # quota_tracker.py: ajustar com uso real antes de confiar cegamente.
 DEFAULT_API_CALL_TIMEOUT_SECONDS = 200
 MAX_TOOL_ROUNDS = 10
+MAX_TOOL_EXEC_SECONDS = 90

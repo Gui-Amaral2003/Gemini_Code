@@ -1,3 +1,8 @@
+# TODO: substituir o timeout baseado em ThreadPoolExecutor por políticas
+# específicas por ferramenta. future.result(timeout=...) interrompe apenas
+# a espera; uma função já iniciada continua executando em background.
+# Priorizar timeouts nativos para HTTP, banco de dados e subprocessos,
+# além de definir o ciclo de vida e shutdown do executor.
 from __future__ import annotations
 
 import httpx
@@ -13,6 +18,8 @@ from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
+
 from tools import TOOL_DEFINITIONS, TOOLS
 from tools.confirmation import confirm_action
 
@@ -20,6 +27,7 @@ from .cache import PromptCache
 from .config import (
     DEFAULT_API_CALL_TIMEOUT_SECONDS,
     MAX_TOOL_ROUNDS,
+    MAX_TOOL_EXEC_SECONDS,
     DEFAULT_CACHE_PATH,
     DEFAULT_MODEL,
     DEFAULT_TRACE_LOG_PATH,
@@ -48,6 +56,15 @@ logger.setLevel(logging.INFO)
 
 # Tools cujo retorno pode conter um arquivo gerado (ex: PNG de gráfico) a ser propagado até quem consome o GeminiResponse (ex: gemini_terminal.py decide se mantém ou descarta o arquivo).
 PLOT_TOOL_NAMES = {"plot_sheet_data", "plot_table_data"}
+
+# Tools cujo fluxo de confirmação (confirm_action/confirm_action_typed) roda DENTRO da própria função — nunca entram no wrapper de timeout genérico (ver MAX_TOOL_EXEC_SECONDS em config.py). Continuam protegidas só pelas defesas que já têm hoje (subprocess timeout, connect_args do pyodbc).
+TOOLS_REQUIRING_CONFIRMATION = {
+    'update_table',
+    'delete_table_rows',
+    'edit_repo_file',
+    'run_script',
+    'create_file'
+}
 
 # httpx.TimeoutException cobre ReadTimeout/ConnectTimeout/WriteTimeout/PoolTimeout.
 # RemoteProtocolError entra porque, na prática (relatos do próprio fórum do
@@ -125,6 +142,10 @@ class GeminiClient:
         # Reiniciado a cada generate() — arquivos gerados por tools nesta chamada.
         self._current_generated_files: list[Path] = []
         self._created_files_this_session: set[Path] = set()
+
+        # Pool para o wrapper de timeout de execução de tool (ver _execute_tool_call). Vive durante toda a sessão do client — uma thread abandonada por timeout continua rodando até terminar sozinha (Python não mata threads à força), então em uso normal isso deve ser raro o suficiente pra não preocupar. Sem shutdown explícito por decisão consciente.
+        self._tool_executor = ThreadPoolExecutor(max_workers = 4)
+
 
     def _emit_activity(self, event_type: str, message: str, **kwargs) -> ActivityEvent:
         """Registra um evento e o envia para a UI sem acoplar o cliente ao terminal."""
@@ -225,7 +246,34 @@ class GeminiClient:
                         )
                     }
 
-            result = function(**arguments)
+            if tool_name in TOOLS_REQUIRING_CONFIRMATION:
+                # Sem wrapper de timeout — o confirm_action/confirm_action_typed de dentro da função espera o humano, e não há como interromper essa espera sem risco de execução "fantasma" concorrente.
+                result = function(**arguments)
+            else:
+                future = self._tool_executor.submit(function, **arguments)
+                try:
+                    result = future.result(timeout=MAX_TOOL_EXEC_SECONDS)
+                except FutureTimeoutError:
+                    future.cancel()
+                    logger.warning(
+                        "Ferramenta '%s' excedeu %ds e foi abandonada (a "
+                        "execução pode continuar rodando em background).",
+                        tool_name, MAX_TOOL_EXEC_SECONDS,
+                    )
+                    self._emit_activity(
+                        "tool_failed",
+                        f"Ferramenta {tool_name} excedeu {MAX_TOOL_EXEC_SECONDS}s",
+                        tool=tool_name,
+                        duration=time.perf_counter() - started_at,
+                    )
+                    return {
+                        "error": (
+                            f"A ferramenta '{tool_name}' excedeu o tempo limite de "
+                            f"execução ({MAX_TOOL_EXEC_SECONDS}s) e a espera foi "
+                            "abandonada. Considere refinar o filtro/parâmetros para "
+                            "reduzir o volume de dados processado."
+                        )
+                    }
 
             logger.info("Ferramenta '%s' executada com sucesso.", tool_name)
             self._emit_activity(
