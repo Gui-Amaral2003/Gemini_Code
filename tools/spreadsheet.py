@@ -150,7 +150,7 @@ def read_sheet(path: str, sheet_name: Optional[str] = None, start_row: int = 0, 
 
     return page.to_markdown(index = False) + footer
 
-def search_in_sheet(path: str, query: str, sheet_name: Optional[str] = None, column: Optional[list[str]] = None, max_matches: int = 30) -> str:
+def search_in_sheet(path: str, query: str, sheet_name: Optional[str] = None, column: Optional[str] = None, max_matches: int = 30) -> str:
     """Busca um valor (texto ou número, comparação por substring, sem diferenciar maiúsculas/minúsculas) em uma aba/CSV. Se column for informado, busca só nessa coluna; caso contrário, busca em todas as colunas. Retorna as linhas que batem, limitado a max_matches."""
     
     file_path, error = _validate_spreadsheet_path(path)
@@ -165,7 +165,7 @@ def search_in_sheet(path: str, query: str, sheet_name: Optional[str] = None, col
         return f"A planilha/aba está vazia: {file_path.name}"
 
     if column:
-        _, error = _validate_columns(df, column)
+        _, error = _validate_columns(df, [column])
         if error:
             return error
         target = df[[column]]

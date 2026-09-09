@@ -278,7 +278,7 @@ TOOL_DEFINITIONS = [
                 },
                 "max_rows": {
                     "type": "integer",
-                    "description": "Máximo de linhas a retornar nesta chamada. Padrão: 200.",
+                    "description": "Máximo de linhas a retornar nesta chamada. Padrão: 100.",
                 },
                 "columns": {
                     "type": "array",
@@ -321,7 +321,7 @@ TOOL_DEFINITIONS = [
                 },
                 "max_matches": {
                     "type": "integer",
-                    "description": "Máximo de linhas encontradas a retornar. Padrão: 50.",
+                    "description": "Máximo de linhas encontradas a retornar. Padrão: 30.",
                 },
             },
             "required": ["path", "query"],
