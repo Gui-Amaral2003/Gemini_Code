@@ -1,4 +1,5 @@
 import json
+from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -6,6 +7,7 @@ import pytest
 import gemini.client as client_module
 from gemini.client import GeminiClient
 from gemini.exceptions import GeminiTimeoutError
+from tools.registry import ToolPolicy
 
 
 # --------------------------------------------------------------------------- #
@@ -163,7 +165,11 @@ def test_generate_executes_tool_call_and_synthesizes(make_client, monkeypatch):
     def fake_soma(a, b):
         return {"resultado": a + b}
 
-    monkeypatch.setattr(client_module, "TOOLS", {"soma": fake_soma})
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {"soma": ToolPolicy("soma", fake_soma)},
+    )
 
     call_step = make_function_call_step("soma", {"a": 2, "b": 3}, call_id="call_abc")
     first_interaction = make_interaction("interaction-1", steps=[call_step], output_text="")
@@ -190,7 +196,7 @@ def test_generate_executes_tool_call_and_synthesizes(make_client, monkeypatch):
 # --------------------------------------------------------------------------- #
 
 def test_unknown_tool_returns_error_without_crashing(make_client, monkeypatch):
-    monkeypatch.setattr(client_module, "TOOLS", {})  # nenhuma tool registrada
+    monkeypatch.setattr(client_module, "TOOL_POLICIES", {})
 
     call_step = make_function_call_step("tool_inexistente", {}, call_id="call_x")
     first_interaction = make_interaction("interaction-1", steps=[call_step], output_text="")
@@ -221,7 +227,17 @@ def test_generated_files_from_plot_tool_are_tracked(make_client, monkeypatch, tm
     def fake_plot_sheet_data(**_kwargs):
         return {"status": "ok", "file_path": str(fake_png)}
 
-    monkeypatch.setattr(client_module, "TOOLS", {"plot_sheet_data": fake_plot_sheet_data})
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {
+            "plot_sheet_data": ToolPolicy(
+                "plot_sheet_data",
+                fake_plot_sheet_data,
+                generate_file=True,
+            )
+        },
+    )
 
     call_step = make_function_call_step(
         "plot_sheet_data", {"file_path": "dados.csv"}, call_id="call_plot"
@@ -295,7 +311,11 @@ def test_cheap_model_routing_after_terminal_tool_round(make_client, monkeypatch)
     def fake_analyze_sheet_data(**_kwargs):
         return "Resultado: 42"
 
-    monkeypatch.setattr(client_module, "TOOLS", {"analyze_sheet_data": fake_analyze_sheet_data})
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {"analyze_sheet_data": ToolPolicy("analyze_sheet_data", fake_analyze_sheet_data)},
+    )
 
     call_step = make_function_call_step(
         "analyze_sheet_data", {"file_path": "x.csv", "operation": "sum"}, call_id="call_analyze"
@@ -320,7 +340,11 @@ def test_cheap_model_requesting_more_tools_falls_back_to_strong_model(make_clien
     def fake_analyze_sheet_data(**_kwargs):
         return "Resultado: 42"
 
-    monkeypatch.setattr(client_module, "TOOLS", {"analyze_sheet_data": fake_analyze_sheet_data})
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {"analyze_sheet_data": ToolPolicy("analyze_sheet_data", fake_analyze_sheet_data)},
+    )
 
     call_step = make_function_call_step(
         "analyze_sheet_data", {"file_path": "x.csv", "operation": "sum"}, call_id="call_analyze"
@@ -359,7 +383,11 @@ def test_cheap_model_requesting_more_tools_falls_back_to_strong_model(make_clien
 
 
 def test_activity_callback_tracks_model_tool_and_completion(make_client, monkeypatch):
-    monkeypatch.setattr(client_module, "TOOLS", {"soma": lambda a, b: a + b})
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {"soma": ToolPolicy("soma", lambda a, b: a + b)},
+    )
     tool_call = make_function_call_step("soma", {"a": 2, "b": 3})
     first = make_interaction("interaction-1", steps=[tool_call], output_text="")
     final = make_interaction("interaction-2", output_text="5")
@@ -414,7 +442,11 @@ def test_tool_limit_counts_rounds_instead_of_individual_calls(make_client, monke
         return value
 
     monkeypatch.setattr(client_module, "MAX_TOOL_ROUNDS", 1)
-    monkeypatch.setattr(client_module, "TOOLS", {"fake_tool": fake_tool})
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {"fake_tool": ToolPolicy("fake_tool", fake_tool)},
+    )
     monkeypatch.setattr(
         client_module,
         "confirm_action",
@@ -444,7 +476,11 @@ def test_tool_limit_is_checked_before_executing_next_round(make_client, monkeypa
         return value
 
     monkeypatch.setattr(client_module, "MAX_TOOL_ROUNDS", 1)
-    monkeypatch.setattr(client_module, "TOOLS", {"fake_tool": fake_tool})
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {"fake_tool": ToolPolicy("fake_tool", fake_tool)},
+    )
     monkeypatch.setattr(client_module, "confirm_action", lambda _message: False)
     first = make_interaction(
         "interaction-1",
@@ -474,4 +510,58 @@ def test_confirming_tool_limit_extends_it_by_a_full_block(make_client, monkeypat
     assert [event.type for event in gc.last_activities] == [
         "budget_exceeded",
         "budget_extended",
+    ]
+
+
+def test_tool_policy_timeout_override_returns_error(make_client, monkeypatch):
+    release_tool = Event()
+
+    def slow_tool():
+        release_tool.wait()
+        return "concluída em background"
+
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {"slow_tool": ToolPolicy("slow_tool", slow_tool, timeout_seconds=0.01)},
+    )
+    gc = make_client([])
+
+    try:
+        result = gc._execute_tool_call(make_function_call_step("slow_tool", {}))
+    finally:
+        release_tool.set()
+
+    assert "excedeu o tempo limite" in result["error"]
+    assert [event.type for event in gc.last_activities] == [
+        "tool_started",
+        "tool_failed",
+    ]
+
+
+def test_confirmation_policy_bypasses_timeout_executor(make_client, monkeypatch):
+    monkeypatch.setattr(
+        client_module,
+        "TOOL_POLICIES",
+        {
+            "confirmed_tool": ToolPolicy(
+                "confirmed_tool",
+                lambda: "executada diretamente",
+                requires_confirmation=True,
+            )
+        },
+    )
+    gc = make_client([])
+    gc._tool_executor = SimpleNamespace(
+        submit=lambda *_args, **_kwargs: pytest.fail(
+            "tool com confirmação não deve entrar no executor"
+        )
+    )
+
+    result = gc._execute_tool_call(make_function_call_step("confirmed_tool", {}))
+
+    assert result == "executada diretamente"
+    assert [event.type for event in gc.last_activities] == [
+        "tool_started",
+        "tool_completed",
     ]

@@ -20,7 +20,7 @@ from google.genai import types
 
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
-from tools import TOOL_DEFINITIONS, TOOLS
+from tools import TOOL_DEFINITIONS, TOOL_POLICIES
 from tools.confirmation import confirm_action
 
 from .cache import PromptCache
@@ -53,18 +53,6 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 logger.setLevel(logging.INFO)
-
-# Tools cujo retorno pode conter um arquivo gerado (ex: PNG de gráfico) a ser propagado até quem consome o GeminiResponse (ex: gemini_terminal.py decide se mantém ou descarta o arquivo).
-PLOT_TOOL_NAMES = {"plot_sheet_data", "plot_table_data"}
-
-# Tools cujo fluxo de confirmação (confirm_action/confirm_action_typed) roda DENTRO da própria função — nunca entram no wrapper de timeout genérico (ver MAX_TOOL_EXEC_SECONDS em config.py). Continuam protegidas só pelas defesas que já têm hoje (subprocess timeout, connect_args do pyodbc).
-TOOLS_REQUIRING_CONFIRMATION = {
-    'update_table',
-    'delete_table_rows',
-    'edit_repo_file',
-    'run_script',
-    'create_file'
-}
 
 # httpx.TimeoutException cobre ReadTimeout/ConnectTimeout/WriteTimeout/PoolTimeout.
 # RemoteProtocolError entra porque, na prática (relatos do próprio fórum do
@@ -211,7 +199,8 @@ class GeminiClient:
 
         logger.info("Gemini solicitou ferramenta '%s' com argumentos: %s", tool_name, arguments)
 
-        if tool_name not in TOOLS:
+        policy = TOOL_POLICIES.get(tool_name)
+        if policy is None:
             self._emit_activity(
                 "tool_failed",
                 f"Ferramenta {tool_name} nao registrada",
@@ -221,11 +210,11 @@ class GeminiClient:
             return {
                 "error": (
                     f"Ferramenta '{tool_name}' não está registrada. "
-                    f"Disponíveis: {list(TOOLS)}"
+                    f"Disponíveis: {list(TOOL_POLICIES)}"
                 )
             }
 
-        function = TOOLS[tool_name]
+        function = policy.function
 
         try:
             # run_script só pode executar arquivos criados nesta sessão através de create_file.
@@ -246,32 +235,37 @@ class GeminiClient:
                         )
                     }
 
-            if tool_name in TOOLS_REQUIRING_CONFIRMATION:
+            if policy.requires_confirmation:
                 # Sem wrapper de timeout — o confirm_action/confirm_action_typed de dentro da função espera o humano, e não há como interromper essa espera sem risco de execução "fantasma" concorrente.
                 result = function(**arguments)
             else:
+                timeout = (
+                    policy.timeout_seconds
+                    if policy.timeout_seconds is not None
+                    else MAX_TOOL_EXEC_SECONDS
+                )
                 future = self._tool_executor.submit(function, **arguments)
                 try:
-                    result = future.result(timeout=MAX_TOOL_EXEC_SECONDS)
+                    result = future.result(timeout=timeout)
                 except FutureTimeoutError:
                     future.cancel()
                     logger.warning(
                         "Ferramenta '%s' excedeu %ds e foi abandonada (a "
                         "execução pode continuar rodando em background).",
-                        tool_name, MAX_TOOL_EXEC_SECONDS,
+                        tool_name, timeout,
                     )
                     self._emit_activity(
                         "tool_failed",
-                        f"Ferramenta {tool_name} excedeu {MAX_TOOL_EXEC_SECONDS}s",
+                        f"Ferramenta {tool_name} excedeu {timeout}s",
                         tool=tool_name,
                         duration=time.perf_counter() - started_at,
                     )
                     return {
                         "error": (
                             f"A ferramenta '{tool_name}' excedeu o tempo limite de "
-                            f"execução ({MAX_TOOL_EXEC_SECONDS}s) e a espera foi "
-                            "abandonada. Considere refinar o filtro/parâmetros para "
-                            "reduzir o volume de dados processado."
+                            f"execução ({timeout}s) e a espera foi abandonada. "
+                            "Considere refinar o filtro/parâmetros para reduzir o "
+                            "volume de dados processado."
                         )
                     }
 
@@ -283,7 +277,8 @@ class GeminiClient:
                 duration=time.perf_counter() - started_at,
             )
 
-            # Registra arquivos criados pelo create_file
+            # TODO: mover esta regra de ciclo de vida da sessão para ToolPolicy.
+            # Registra arquivos criados pelo create_file.
             if (tool_name == "create_file" and isinstance(result, dict) and result.get("success") and result.get("file_path")):
                 created_path = Path(result["file_path"]).resolve()
 
@@ -295,7 +290,7 @@ class GeminiClient:
                 )
 
             # Gerar arquivos de ferramentas de plotagem (ex: gráficos) para propagar no GeminiResponse.
-            if (tool_name in PLOT_TOOL_NAMES and isinstance(result, dict) and result.get("file_path")):
+            if (policy.generate_file and isinstance(result, dict) and result.get("file_path")):
                 file_path = Path(result["file_path"])
                 self._current_generated_files.append(file_path)
 
@@ -831,7 +826,6 @@ class GeminiClient:
             f"(limite: {current_limit}).\n\nContinuar mesmo assim?"
         )
         self._emit_activity(
-            'budget_exceeded',
             "budget_exceeded",
             mensagem,
             details={"tool_rounds": tool_rounds, "tool_round_limit": current_limit},
