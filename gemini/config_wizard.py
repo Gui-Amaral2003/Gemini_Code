@@ -1,7 +1,7 @@
 """
-Camada de apresentação (Rich) sobre gemini/env_config.py. Acessível via
-/config no terminal ou --config na CLI, antes de existir GeminiClient —
-por isso este módulo não importa gemini.client.
+Camada de apresentação (Rich) sobre env_config.py e config_checks.py.
+Acessível via /config no terminal ou --config na CLI, antes de existir
+GeminiClient — por isso este módulo não importa gemini.client.
 """
 from typing import Optional
 from rich.console import Console
@@ -15,44 +15,57 @@ from .env_config import (
     ENV_PATH,
     groups,
     load_env_status,
-    is_configured,
     update_env_value,
 )
+from .config_checks import CheckStatus, ConfigCheck, run_local_checks
 
 STYLE_ACCENT = "bright_yellow"
 STYLE_OK = "bold green"
 STYLE_MISSING = "bold red"
+STYLE_WARNING = "bold yellow"
+STYLE_SKIPPED = "dim"
 STYLE_SYSTEM = "dim"
 
 
-def _status_table(console: Console) -> None:
-    status = load_env_status()
+_STATUS_PRESENTATION = {
+    CheckStatus.OK: ("[OK]", STYLE_OK),
+    CheckStatus.WARNING: ("[!]", STYLE_WARNING),
+    CheckStatus.ERROR: ("[X]", STYLE_MISSING),
+    CheckStatus.SKIPPED: ("[-]", STYLE_SKIPPED),
+}
+
+
+def _status_table(console: Console, checks: Optional[list[ConfigCheck]] = None) -> None:
+    checks = checks if checks is not None else run_local_checks()
 
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2), expand=True)
     table.add_column(style="bold", ratio=1)
-    table.add_column(ratio=1)
+    table.add_column(ratio=3)
 
     first = True
-    for group_name, settings in groups().items():
+    group_names = list(dict.fromkeys(check.group for check in checks))
+    for group_name in group_names:
         if not first:
             table.add_row("", "")
         first = False
 
         table.add_row(Text(group_name.upper(), style="bold underline"), "")
-        for setting in settings:
-            configured = is_configured(setting.key, status)
-            marker = (
-                Text("✓ Configurado", style=STYLE_OK)
-                if configured else
-                Text("✗ Não configurado", style=STYLE_MISSING)
-            )
-            table.add_row(f"  {setting.label}", marker)
+        for check in (item for item in checks if item.group == group_name):
+            marker, style = _STATUS_PRESENTATION[check.status]
+            message = Text(f"{marker} {check.message}", style=style)
+            if check.remediation:
+                message.append(f"\nComo corrigir: {check.remediation}", style=STYLE_SYSTEM)
+            table.add_row(f"  {check.name}", message)
+
+    errors = sum(check.status is CheckStatus.ERROR for check in checks)
+    warnings = sum(check.status is CheckStatus.WARNING for check in checks)
+    summary = f"{errors} erro(s) · {warnings} aviso(s) · diagnóstico local (sem rede)"
 
     console.print(
         Panel(
             table,
             title="Configuração",
-            subtitle=f"[dim]{ENV_PATH}[/dim]",
+            subtitle=f"[dim]{ENV_PATH} · {summary}[/dim]",
             border_style=STYLE_ACCENT,
             box=box.ROUNDED,
         )

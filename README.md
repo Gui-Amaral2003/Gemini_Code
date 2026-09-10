@@ -233,7 +233,7 @@ python gemini_terminal.py
 
 Comandos disponíveis:
 - `/help` — mostra a ajuda completa
-- `/config` — mostra quais configurações estão preenchidas, sem revelar segredos
+- `/config` — executa diagnóstico local de variáveis, dependências, tools e diretórios, sem revelar segredos ou acessar a rede
 - `/config edit` — abre o assistente de configuração do `.env`
 - `/history` — mostra o histórico local da sessão
 - `/sessions` — lista as sessões persistidas e destaca a atual

@@ -3,6 +3,7 @@ from io import StringIO
 from rich.console import Console
 
 from gemini import config_wizard
+from gemini.config_checks import CheckStatus, ConfigCheck
 from gemini.env_config import EnvSetting
 
 
@@ -82,3 +83,21 @@ def test_invalid_value_is_prompted_again(monkeypatch):
     config_wizard._edit_setting(make_console(), setting, {})
 
     assert saved == [("PORT", "1234")]
+
+
+def test_status_table_renders_diagnostics_without_secret_values():
+    output = StringIO()
+    console = Console(file=output, force_terminal=False, width=120)
+    checks = [
+        ConfigCheck("Gemini", "API key", CheckStatus.OK, "Configurada; validade externa não testada."),
+        ConfigCheck("Airflow", "URL", CheckStatus.WARNING, "URL usa HTTP sem criptografia."),
+        ConfigCheck("Hive", "Integração", CheckStatus.SKIPPED, "Opcional e não configurada."),
+    ]
+
+    config_wizard._status_table(console, checks)
+    rendered = output.getvalue()
+
+    assert "diagnóstico local (sem rede)" in rendered
+    assert "1 aviso(s)" in rendered
+    assert "Configurada; validade externa não testada." in rendered
+    assert "AIza" not in rendered

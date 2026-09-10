@@ -75,6 +75,18 @@
 
 ## TODO: Separar configurações de desenvolvimento e produção
 
+## TODO: Adicionar `/config test` para verificações externas
+# Pedir confirmação antes de testar Gemini, SQL Server, Hive e Airflow.
+# O teste do Gemini consome uma chamada e deve deixar esse custo explícito.
+
+## TODO: Exportar diagnóstico sanitizado do `/config`
+# Nunca incluir secrets, hosts internos, headers HTTP, connection strings,
+# prompts ou caminhos pessoais no relatório.
+
+## TODO: Avaliar reparos assistidos de configuração
+# Limitar a ações locais, explícitas e reversíveis. Nunca alterar
+# credenciais, conexões externas ou permissões automaticamente.
+
 ## TODO: Tornar modelos fallback configuráveis
 # Não deixar a lista de modelos hardcoded.
 
