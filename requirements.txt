@@ -1,4 +1,4 @@
-# Gemini Client - Dependências
+# Gemini Terminal - dependências de execução
 
 # Google Gemini API
 google-genai>=2.4.0
@@ -18,7 +18,7 @@ sqlalchemy>=2.0.0
 # Parsing de YAML para definição de processos
 pyyaml>=6.0
 
-# Driver SQL Server (opcional, necessário se usar query_table)
+# Driver SQL Server (necessário para as tools de SQL Server)
 pyodbc>=5.0.0
 
 # Manipulação e análise de dados
@@ -41,9 +41,13 @@ plotext>=5.2.8
 # Cliente HTTP (integração com a API do Airflow)
 requests>=2.31.0
 
-# Driver Hive (conex~eos via SQLAlchemy, auth LDAP)
+# Driver Hive (necessário para as tools de Hive via SQLAlchemy/LDAP)
 pyhive[hive]>=0.7.0
 thrift>=0.16.0
 
-# Timeout de chamadas HTTP ao Gemini — usado diretamente para capturar httpx.TimeoutException/RemoteProtocolError (dependência transitiva do google-genai, mas usada explicitamente agora, então vira direta).
+# Timeout das chamadas ao Gemini. Embora também seja dependência transitiva
+# do google-genai, o projeto importa e trata exceções do httpx diretamente.
 httpx>=0.27.0
+
+# Testes
+pytest>=7.4.0

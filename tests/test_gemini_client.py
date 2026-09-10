@@ -256,10 +256,8 @@ def test_generated_files_from_plot_tool_are_tracked(make_client, monkeypatch, tm
 # --------------------------------------------------------------------------- #
 
 def test_fallback_to_next_model_on_rate_limit(make_client):
-    # _create_interaction faz até 3 tentativas (max_retries=2, hardcoded)
-    # no MESMO modelo antes de propagar o erro para _create_with_fallback
-    # decidir trocar de modelo — por isso são 3 erros, não 1.
-    rate_limit_errors = [Exception("429 Resource exhausted") for _ in range(3)]
+    # Um 429 sem classificacao segura nao deve gastar retries no mesmo modelo.
+    rate_limit_errors = [Exception("429 Resource exhausted")]
     interaction = make_interaction("interaction-1", output_text="ok com fallback")
 
     gc = make_client(
@@ -271,9 +269,24 @@ def test_fallback_to_next_model_on_rate_limit(make_client):
 
     assert response.text == "ok com fallback"
     assert response.model == "modelo-fallback"
-    assert len(gc.client.interactions.calls) == 4  # 3 tentativas no modelo padrão + 1 no fallback
-    assert all(c["model"] == gc.default_model for c in gc.client.interactions.calls[:3])
-    assert gc.client.interactions.calls[3]["model"] == "modelo-fallback"
+    assert len(gc.client.interactions.calls) == 2
+    assert gc.client.interactions.calls[0]["model"] == gc.default_model
+    assert gc.client.interactions.calls[1]["model"] == "modelo-fallback"
+
+
+def test_transient_rate_limit_retries_same_model(make_client):
+    transient_error = Exception("429 rate_limit_exceeded requestsPerMinute")
+    interaction = make_interaction("interaction-1", output_text="ok após retry")
+    gc = make_client([transient_error, interaction])
+
+    response = gc.generate("teste", use_cache=False)
+
+    assert response.text == "ok após retry"
+    assert len(gc.client.interactions.calls) == 2
+    assert all(
+        call["model"] == gc.default_model
+        for call in gc.client.interactions.calls
+    )
 
 
 # --------------------------------------------------------------------------- #

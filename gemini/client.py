@@ -39,6 +39,7 @@ from .exceptions import GeminiTimeoutError
 from .model_routing import all_terminal
 from .models import ActivityEvent, GeminiResponse
 from .quota_tracker import QuotaTracker
+from .rate_limits import RateLimitKind, classify_rate_limit
 
 try:
     from dotenv import load_dotenv
@@ -308,16 +309,6 @@ class GeminiClient:
             )
             return {"error": str(e)}
 
-    def _is_rate_limit_error(self, error: Exception) -> bool:
-        error_str = str(error).lower()
-        return (
-            "429" in error_str
-            or "resources exhausted" in error_str
-            or "resource_exhausted" in error_str
-            or "rate limit" in error_str
-            or "rate_limit" in error_str
-        )
-
     def _create_interaction(
         self,
         *,
@@ -386,12 +377,18 @@ class GeminiClient:
                         "nova tentativa automática será feita."
                     ) from error
                 
-                if not self._is_rate_limit_error(error):
+                rate_limit = classify_rate_limit(error)
+                if rate_limit.kind is RateLimitKind.NOT_RATE_LIMIT:
+                    raise
+                # Cota diaria não melhora com backoff. Um 429 desconhecido tambem nao justifica gastar outra chamada no mesmo modelo.
+                if rate_limit.kind is not RateLimitKind.TRANSIENT:
                     raise
                 if attempt >= max_retries:
                     raise
 
-                delay = min(2 ** attempt, 10) + random.uniform(0, 0.5)
+                delay = rate_limit.retry_after_seconds
+                if delay is None:
+                    delay = min(2 ** attempt, 10) + random.uniform(0, 0.5)
                 self._emit_activity(
                     "rate_limit_backoff",
                     f"Limite atingido em {model}; aguardando {delay:.2f}s antes de tentar de novo",
@@ -484,7 +481,7 @@ class GeminiClient:
                 last_error = error
                 if call_id:
                     self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="failure", error=str(error))
-                if self._is_rate_limit_error(error):
+                if classify_rate_limit(error).kind is not RateLimitKind.NOT_RATE_LIMIT:
                     self._emit_activity(
                         "fallback_selected",
                         f"Limite de {model}; tentando o proximo modelo",

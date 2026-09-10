@@ -1,8 +1,8 @@
 # Gemini Terminal
 
-Agente de IA em Python para a [Google Gemini API](https://ai.google.dev/), com suporte a conversas persistentes, ferramentas customizáveis (function calling), retry automático, cache, roteamento entre modelos e terminal interativo.
+Agente de IA em Python para a [Google Gemini API](https://ai.google.dev/), com terminal interativo, conversas persistentes, ferramentas locais (function calling), cache e roteamento entre modelos.
 
-A biblioteca está organizada em um pacote Python dedicado em `gemini/`. O arquivo `old_gemini_client.py` é mantido apenas como referência da implementação anterior.
+A biblioteca está organizada em um pacote Python dedicado em `gemini/`, enquanto as integrações executáveis ficam no catálogo central de `tools/registry.py`.
 
 > ⚠️ **Em desenvolvimento**: este projeto ainda está em fase inicial. Novas ferramentas e funcionalidades serão adicionadas com frequência.
 
@@ -18,13 +18,15 @@ A biblioteca está organizada em um pacote Python dedicado em `gemini/`. O arqui
 - **Leitura de PDFs**: preview, leitura paginada e busca de texto
 - **Ferramentas Git**: leitura de status, diffs, histórico, autoria e edição controlada de arquivos
 - **Segurança em camadas**: whitelist de tabelas/colunas/repositórios, confirmação explícita para escrita, audit log
-- **Retry automático**: recuperação de falhas transitórias com backoff exponencial
+- **Retry consciente de 429**: cota diária e erros desconhecidos seguem para fallback sem retries inúteis; limites transitórios usam backoff e respeitam `RetryInfo`
+- **Timeouts em camadas**: timeout por chamada à API, limite de rodadas de tools e política de execução individual por ferramenta
 - **Cache inteligente**: evita chamadas duplicadas e reduz custo de tokens
 - **Roteamento multi-modelo**: usa um modelo mais barato para sintetizar a resposta depois de ferramentas terminais, preservando o modelo forte para decisões de novas ferramentas
 - **Tracking de cota diária (RPD)**: contador local por modelo, estimando quanto do limite diário do free tier já foi usado, com bloqueio (via confirmação) quando todos os modelos configurados estimam cota esgotada
 - **Geração de gráficos**: cria gráficos de barra ou linha no terminal e salva PNGs temporários para aprovação do usuário
 - **Logging estruturado**: monitoramento de uso em arquivo JSONL
-- **Terminal interativo**: CLI com Rich para uso prático
+- **Terminal interativo**: CLI com Rich e `prompt_toolkit`, incluindo histórico e autocomplete de comandos, arquivos, sessões e recursos cadastrados
+- **Configuração assistida**: `/config` mostra o estado do ambiente e `/config edit` atualiza o `.env` com campos sensíveis ocultos
 - **Rastreamento visual de execução**: acompanha seleção de modelos, tentativas, fallbacks, ferramentas e duração de cada resposta
 
 ---
@@ -54,10 +56,10 @@ cd Gemini_Code
 pip install -r requirements.txt
 ```
 
-Equivalente manual:
+Equivalente manual (instala todas as integrações e as dependências de teste):
 
 ```bash
-pip install google-genai rich python-dotenv sqlalchemy pyyaml pyodbc pandas tabulate openpyxl pypdf matplotlib plotext
+pip install google-genai rich prompt-toolkit python-dotenv sqlalchemy pyyaml pyodbc pandas tabulate openpyxl pypdf matplotlib plotext requests "pyhive[hive]" thrift httpx pytest
 ```
 
 ### 3. Crie seu próprio `.env`
@@ -73,6 +75,16 @@ AIRFLOW_API_URL=http://sua-vm:8080
 AIRFLOW_USERNAME=seu_usuario
 AIRFLOW_PASSWORD=sua_senha
 ```
+
+Você também pode criar e revisar essa configuração pelo próprio terminal:
+
+```bash
+python gemini_terminal.py --config
+```
+
+Depois de iniciar o terminal, use `/config` para consultar o status ou
+`/config edit` para abrir novamente o assistente. Valores secretos não são
+exibidos durante a consulta.
 
 Uma chave Gemini gratuita pode ser obtida em [ai.google.dev](https://ai.google.dev/).
 
@@ -172,7 +184,7 @@ python gemini_terminal.py --session trabalho
 from gemini import GeminiClient, ChatSession, load_processes, run_process
 ```
 
-O arquivo `old_gemini_client.py` contém a implementação anterior, mantida só para referência. A organização oficial do projeto fica em `gemini/`.
+O pacote público exporta o cliente, sessões, modelos de resposta e funções para processos reutilizáveis. A implementação principal fica em `gemini/`.
 
 ---
 
@@ -221,18 +233,21 @@ python gemini_terminal.py
 
 Comandos disponíveis:
 - `/help` — mostra a ajuda completa
+- `/config` — mostra quais configurações estão preenchidas, sem revelar segredos
+- `/config edit` — abre o assistente de configuração do `.env`
 - `/history` — mostra o histórico local da sessão
 - `/sessions` — lista as sessões persistidas e destaca a atual
 - `/new <nome>` — cria e ativa uma sessão vazia
 - `/switch <nome>` — troca para uma sessão existente
 - `/clear` — limpa o contexto e desvincula a conversa anterior
+- `/quote` — mostra a cota diária estimada por modelo em barras horizontais
 - `/tools` — lista as ferramentas por categoria
 - `/tools <nome>` — mostra a descrição detalhada de uma ferramenta
 - `/think` — liga ou desliga a exibição dos resumos de pensamento
 - `/logs` — alterna a visibilidade dos logs
 - `/tokens` — mostra o consumo de tokens da sessão
 - `/trace` — mostra as etapas e tempos da última execução sob demanda
-- `/trace on` / `/trace off` — liga ou desliga timeline e rodapé automáticos (desligados por padrão)
+- `/trace on` / `/trace off` — liga ou desliga a timeline detalhada automática (desligada por padrão)
 - `/exit` — sai do terminal
 
 ### Usando ferramentas
@@ -270,7 +285,28 @@ response = client.generate(
 print(response.text)
 ```
 
-O roteamento considera terminais `analyze_sheet_data`, `analyze_table_data`, `plot_sheet_data`, `plot_table_data`, `search_in_pdf`, `search_in_sheet`, `update_table`, `delete_table_rows`, `git_diff_unstaged`, `git_diff_staged`, `git_show`, `git_blame` e `edit_repo_file`. Ferramentas exploratórias, como `preview_sheet`, `read_sheet`, `query_table`, `read_pdf`, `git_status` e `git_log`, mantêm o modelo forte para a próxima decisão.
+O roteamento de cada ferramenta é declarado junto de suas demais políticas em
+`tools/registry.py`. Ferramentas terminais podem encaminhar a síntese ao modelo
+barato; ferramentas exploratórias mantêm o modelo forte para decidir o próximo
+passo. Essa mesma política central informa se a tool exige confirmação, gera
+arquivo e possui um timeout específico.
+
+### Retries, timeout e fallback
+
+Cada chamada ao Gemini possui timeout HTTP. Erros transitórios configurados são
+repetidos com backoff, enquanto erros 429 são classificados antes de consumir
+outra requisição:
+
+- cota diária (RPD): não repete no mesmo modelo e tenta o próximo fallback;
+- limite temporário (RPM/TPS): repete no mesmo modelo com backoff;
+- 429 sem classificação segura: evita novo retry no mesmo modelo e usa fallback.
+
+A execução também limita a quantidade de rodadas de function calling. Tools sem
+confirmação usam o timeout definido em sua `ToolPolicy` ou o limite global. Tools
+que aguardam confirmação humana ficam fora desse wrapper para que a espera do
+usuário não seja confundida com tempo de execução. O wrapper baseado em threads
+abandona a espera, mas não consegue encerrar à força uma função Python que já
+tenha começado; integrações de rede e banco devem manter seus próprios timeouts.
 
 ### Geração de gráficos
 
@@ -352,6 +388,9 @@ print(response.text)
 │   ├── cache.py                # Cache de prompts e respostas
 │   ├── model_routing.py        # Classificação de tools e roteamento de modelos
 │   ├── quota_tracker.py        # Cota diária (RPD) estimada por modelo, com bloqueio via confirmação
+│   ├── rate_limits.py          # Classificação de 429 diário, transitório ou desconhecido
+│   ├── env_config.py           # Catálogo e persistência das variáveis do .env
+│   ├── config_wizard.py        # Interface do assistente /config
 │   ├── chat_sessions.json      # Histórico persistente das sessões (gerado localmente)
 │   ├── gemini_cache.json       # Cache local de respostas (gerado localmente)
 │   ├── gemini_usage_log.jsonl  # Log local de uso da API (gerado localmente)
@@ -360,7 +399,7 @@ print(response.text)
 ├── tools/
 │   ├── __init__.py
 │   ├── definitions.py          # Definições das ferramentas enviadas ao Gemini
-│   ├── registry.py             # Registro das ferramentas executáveis
+│   ├── registry.py             # Registro e políticas das ferramentas executáveis
 │   ├── filesystem.py           # read_file / create_file
 │   ├── confirmation.py         # Confirmações explícitas para operações sensíveis
 │   ├── script_runner.py        # Execução confirmada de scripts Python
@@ -375,15 +414,17 @@ print(response.text)
 │   ├── pdf_reader.py           # Preview, leitura e busca de texto em PDFs
 │   ├── git_tool.py             # Leitura, diffs, histórico, autoria e edição em Git
 │   └── validation.py           # Validação de identificadores e filtros
-├── old_gemini_client.py        # Implementação anterior, mantida para referência
 ├── gemini_terminal.py          # CLI interativa
+├── terminal_completer.py       # Histórico e autocomplete com prompt_toolkit
+├── terminal_timeline.py        # Timeline Rich das atividades da execução
 ├── process.yaml                # Definição de processos reutilizáveis
 ├── requirements.txt
 ├── README.md
 ├── LICENSE
 ├── TODO.md
 ├── examples/
-│   └── SampleSuperstore.csv    # Dataset de exemplo para testar as ferramentas de planilha
+│   ├── SampleSuperstore.csv    # Dataset de exemplo para análises e gráficos
+│   └── new_deal_detector_v1_diagnostics.xlsx # Excel de exemplo para busca por aba/coluna
 ├── output/                     # Gerado localmente: scripts criados por create_file e gráficos
 │   ├── plots/                  # Gráficos que o usuário optou por manter
 │   └── plots_staging/          # Gráficos recém-gerados, aguardando decisão do usuário
@@ -477,7 +518,31 @@ result = update_table(
 print(result)
 ```
 
-### 6. `analyze_sheet_data`
+### 6. `list_sheets`, `preview_sheet`, `read_sheet` e `search_in_sheet`
+
+Exploram arquivos CSV e Excel sem precisar carregar toda a planilha na resposta:
+
+- `list_sheets`: lista as abas de um arquivo Excel;
+- `preview_sheet`: mostra cabeçalho, tipos e uma pequena amostra;
+- `read_sheet`: faz leitura paginada e permite selecionar colunas;
+- `search_in_sheet`: procura um valor em todas as colunas ou exclusivamente na coluna informada.
+
+Para agregações, prefira `analyze_sheet_data`. Para localizar registros por
+texto ou número, `search_in_sheet` reduz o volume enviado ao modelo.
+
+```python
+from tools.spreadsheet import search_in_sheet
+
+print(search_in_sheet(
+    path="examples/new_deal_detector_v1_diagnostics.xlsx",
+    sheet_name="Top_Anomalies",
+    column="Status",
+    query="Removido",
+    max_matches=30,
+))
+```
+
+### 7. `analyze_sheet_data`
 
 Carrega um CSV ou Excel e aplica agregações, filtros e agrupamentos em uma única chamada.
 
@@ -495,7 +560,7 @@ print(analyze_sheet_data(
 ))
 ```
 
-### 7. `analyze_table_data`
+### 8. `analyze_table_data`
 
 Mesma lógica de `analyze_sheet_data`, mas sobre uma tabela pré-cadastrada do banco — o filtro é aplicado diretamente no SQL antes do carregamento.
 
@@ -510,7 +575,7 @@ print(analyze_table_data(
 ))
 ```
 
-### 8. `preview_pdf`, `read_pdf` e `search_in_pdf`
+### 9. `preview_pdf`, `read_pdf` e `search_in_pdf`
 
 Extraem texto de arquivos `.pdf` usando `pypdf`:
 
@@ -528,7 +593,7 @@ print(search_in_pdf("documentos/relatorio.pdf", query="faturamento", max_matches
 
 A numeração de `start_page` é baseada em zero. PDFs protegidos por senha, corrompidos ou sem texto extraível retornam uma mensagem explicativa; PDFs escaneados podem exigir OCR, que ainda não está incluído.
 
-### 9. `plot_sheet_data` e `plot_table_data`
+### 10. `plot_sheet_data` e `plot_table_data`
 
 Geram gráficos a partir de uma planilha ou tabela permitida, respectivamente. As operações de agregação são as mesmas de `analyze_sheet_data`/`analyze_table_data`; `chart_type` aceita `bar` ou `line`. **Use apenas quando o usuário pedir explicitamente um gráfico** — para um número ou uma tabela, prefira `analyze_sheet_data`/`analyze_table_data`.
 
@@ -545,11 +610,11 @@ resultado = plot_sheet_data(
 print(resultado)
 ```
 
-### 10. `describe_sheet_column` e `describe_table_column`
+### 11. `describe_sheet_column` e `describe_table_column`
 
 Retornam estatísticas descritivas de uma coluna (min/max/média/desvio para numéricas e datas; valores mais frequentes para texto). Úteis antes de `analyze_*`/`plot_*`, para decidir `operation`/`group_by` com mais segurança.
 
-### 11. Ferramentas Git
+### 12. Ferramentas Git
 
 `tools/git_tool.py` fornece leitura de repositórios Git locais e uma ferramenta de edição controlada:
 
@@ -618,7 +683,7 @@ Para adicionar outro repositório (ou torná-lo editável), inclua a entrada em 
              └─────────────────────┘
 ```
 
-### 12. Ferramentas Airflow
+### 13. Ferramentas Airflow
 
 `tools/airflow_tool.py` fornece monitoramento somente-leitura de DAGs via
 API v2 do Airflow (Airflow 3.x):
@@ -672,12 +737,16 @@ em `tools/airflow_tool.py`.
 | Arquivo | Granularidade | Propósito |
 |---|---|---|
 | `gemini/gemini_usage_log.jsonl` | 1 linha por `generate()` completo | Custo/consumo — tokens agregados de todas as tentativas internas. Fonte do `/tokens` e `session_summary()`. |
-| `gemini/interaction_trace_log.jsonl` | 1 linha por tentativa individual de chamada ao modelo (início + fim/erro) | Diagnóstico de latência/hang. Correlacionado por `call_id`; **não** é fonte de custo. Sempre gravado, mesmo com `/logs` oculto. |
+| `gemini/gemini_trace_log.jsonl` | 1 linha por tentativa individual de chamada ao modelo (início + fim/erro) | Diagnóstico de latência/hang. Correlacionado por `call_id`; **não** é fonte de custo. Sempre gravado, mesmo com `/logs` oculto. |
 | `gemini/quota_tracker.json` | 1 registro por modelo, resetado por dia civil | Cota diária (RPD) estimada localmente — não histórico, só o dia atual. Fonte do `/quote`. Estimativa própria, não o limite real do Google. |
 | `gemini/db_write_audit_log.jsonl` | 1 linha por tentativa de `update_table`/`delete_table_rows` | Auditoria de escrita no banco — sucesso, erro ou cancelamento pelo usuário. |
 | `gemini/git_write_audit_log.jsonl` | 1 linha por tentativa de `edit_repo_file` | Auditoria de edição de arquivos em repositórios git. |
 
-Todos os quatro são gerados localmente e não fazem parte do repositório.
+Todos esses arquivos são gerados localmente e não fazem parte do repositório.
+
+Eles podem conter prompts, respostas, caminhos locais e metadados operacionais.
+Não os publique nem force sua inclusão no Git; as regras atuais do `.gitignore`
+já cobrem esses arquivos.
 
 ### Verificar uso de tokens
 
@@ -712,6 +781,12 @@ Este projeto está em desenvolvimento ativo. Contribuições são bem-vindas!
 - 🚀 sugira novas ferramentas
 - 📝 melhore a documentação
 - 💡 proponha novas funcionalidades
+
+Para validar uma mudança localmente:
+
+```bash
+python -m pytest -q
+```
 
 ---
 
