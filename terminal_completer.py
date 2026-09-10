@@ -38,9 +38,10 @@ IGNORED_DIRECTORY_NAMES = {
 }
 
 SLASH_COMMANDS = [
-    "/help", "/history", "/sessions", "/new", "/switch", "/quote",
+    "/help", "/config", "/history", "/sessions", "/new", "/switch", "/quote",
     "/clear", "/tools", "/think", "/logs", "/tokens", "/trace", "/exit",
 ]
+CONFIG_SUBCOMMANDS = ["edit"]
 _TOOL_NAMES = [d["name"] for d in TOOL_DEFINITIONS]
 
 PROMPT_STYLE = Style.from_dict({"prompt": "bold fg:#00ffff"}) 
@@ -176,6 +177,13 @@ class SlashCommandCompleter(Completer):
             for name in _TOOL_NAMES:
                 if name.startswith(partial):
                     yield Completion(name, start_position=-len(partial))
+            return
+
+        if text.startswith("/config "):
+            partial = text[len("/config "):]
+            for option in CONFIG_SUBCOMMANDS:
+                if option.startswith(partial):
+                    yield Completion(option, start_position=-len(partial))
             return
 
         if text.startswith("/") and " " not in text:

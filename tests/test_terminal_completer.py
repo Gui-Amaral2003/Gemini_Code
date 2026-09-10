@@ -27,6 +27,14 @@ def complete_with(completer, text: str):
 def test_completa_comandos_parciais():
     assert complete("/sw") == ["/switch"]
     assert complete("/n") == ["/new"]
+    assert complete("/con") == ["/config"]
+
+
+def test_completa_subcomando_de_configuracao():
+    assert complete("/config ") == ["edit"]
+    assert complete("/config e") == ["edit"]
+    assert complete("/config edit") == ["edit"]
+    assert complete("/config desconhecido") == []
 
 
 def test_nao_completa_texto_comum():

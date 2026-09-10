@@ -9,7 +9,9 @@
 from pathlib import Path
 import argparse
 import logging
+import os
 from gemini import ActivityEvent, GeminiClient, ChatSession
+from gemini.config_wizard import run_wizard, show_status
 from tools.definitions import TOOL_DEFINITIONS
 from tools.confirmation import set_confirm_callback, set_confirm_typed_callback
 from rich.console import Console
@@ -107,11 +109,26 @@ def parse_args(argv=None):
         default=DEFAULT_SESSION_ID,
         help=f"sessao a abrir (padrao: {DEFAULT_SESSION_ID})",
     )
+    parser.add_argument('--config', action = 'store_true', help = 'Abre o assistente de configuração')
+
     return parser.parse_args(argv)
 
 
 def main(argv=None):
     args = parse_args(argv)
+
+    if args.config:
+        run_wizard()
+        return
+
+    if not os.environ.get("GEMINI_API_KEY"):
+        console.print(Panel(
+            "GEMINI_API_KEY não configurada. Iniciando configuração.",
+            style=STYLE_SYSTEM, box=box.ROUNDED,
+        ))
+        run_wizard(only_groups=["Gemini"])
+        return
+
     logging.getLogger(GEMINI_LOGGER_NAME).setLevel(LOG_LEVEL_VISIBLE)
     client = GeminiClient(cheap_model = 'gemini-3.5-flash')
     client.set_thought_callback(make_thought_callback())
@@ -186,6 +203,14 @@ def main(argv=None):
 
             if user_input == "/help":
                 print_help()
+                continue
+
+            if user_input == '/config':
+                show_status(console)
+                continue
+
+            if user_input == '/config edit':
+                run_wizard(console)
                 continue
 
             if user_input == "/history":
@@ -344,6 +369,8 @@ def print_help() -> None:
     table.add_column(style=f"{STYLE_ACCENT} bold")
     table.add_column()
     table.add_row("/help", "Mostra esta ajuda")
+    table.add_row('/config', "Mostra o status da configuração do Gemini")
+    table.add_row('/config edit', "Edita a configuração do Gemini")
     table.add_row("/history", "Mostra o histórico local")
     table.add_row("/sessions", "Lista as sessões persistidas")
     table.add_row("/new <nome>", "Cria e ativa uma nova sessão")
