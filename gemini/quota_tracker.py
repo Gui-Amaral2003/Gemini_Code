@@ -31,6 +31,8 @@ logger = logging.getLogger("gemini_client")
 # Os valores abaixo foram obtidos por mim dia 02/09/2026 — confirme o RPD real de CADA modelo na doc 
 # antes de confiar neles, os limites podem variar por modelo e data.
 RATE_LIMITS_RPD: dict[str, int] = {
+    "gemini-3.8-flash": 20,
+    'gemini-3.7-flash': 20,
     "gemini-3.6-flash": 20,
     "gemini-3.5-flash": 20,
     "gemini-3.5-flash-lite": 20,

@@ -21,6 +21,7 @@ from rich.table import Table
 from rich.text import Text
 from rich.columns import Columns
 from rich.align import Align
+from rich.progress_bar import ProgressBar
 from rich import box
 from terminal_completer import build_prompt_session
 from terminal_timeline import ToolTimeline
@@ -112,7 +113,7 @@ def parse_args(argv=None):
 def main(argv=None):
     args = parse_args(argv)
     logging.getLogger(GEMINI_LOGGER_NAME).setLevel(LOG_LEVEL_VISIBLE)
-    client = GeminiClient(cheap_model = 'gemini-3.5-flash-lite')
+    client = GeminiClient(cheap_model = 'gemini-3.5-flash')
     client.set_thought_callback(make_thought_callback())
     prompt_session = build_prompt_session()
 
@@ -309,18 +310,7 @@ def print_banner(session_id: str | None) -> None:
     title = Text("Gemini Terminal", style=f"{STYLE_ACCENT} bold")
     body = Text.from_markup(
         f"Sessão ativa: [{STYLE_ACCENT}]{session_id or 'temporária'}[/{STYLE_ACCENT}]\n\n"
-        "[bold]Comandos[/bold]\n"
-        "  [cyan]/help[/cyan]     mostra os comandos\n"
-        "  [cyan]/history[/cyan]  mostra o histórico\n"
-        "  [cyan]/sessions[/cyan] lista e troca sessões persistidas\n"
-        "  [cyan]/quote[/cyan]    mostra a cota diária estimada (RPD)\n"
-        "  [cyan]/clear[/cyan]    limpa o contexto\n"
-        "  [cyan]/tools[/cyan]    mostra as ferramentas, /tools <nome> para detalhes\n"
-        "  [cyan]/think[/cyan]    liga/desliga a exibição do raciocínio do Gemini\n"
-        "  [cyan]/logs[/cyan]     alterna visibilidade dos logs\n"
-        "  [cyan]/tokens[/cyan]   mostra consumo\n"
-        "  [cyan]/trace[/cyan]    consulta ou ativa detalhes de execução\n"
-        "  [cyan]/exit[/cyan]     sair"
+        "Utilize /help para visualizar os comandos disponíveis.\n"
     )
     console.print(
         Align.center(
@@ -369,7 +359,7 @@ def print_help() -> None:
     table.add_row("/tools <nome>", "Mostra a descrição completa de uma ferramenta")
     table.add_row("/exit", "Encerra o programa")
 
-    conteudo = Columns([build_sparkle(), table], padding=(0, 4), equal=False, expand=False)
+    conteudo = Columns([table], padding=(0, 4), equal=False, expand=False)
 
     console.print(Panel(conteudo, title="Comandos", border_style=STYLE_ACCENT, box=box.ROUNDED))
 
@@ -549,18 +539,47 @@ def print_quote(client: GeminiClient) -> None:
 
     table = Table(box=box.SIMPLE_HEAVY)
     table.add_column("Modelo", style="bold")
-    table.add_column("Usado hoje", justify="right")
-    table.add_column("Limite", justify="right")
-    table.add_column("Restante", justify="right", style=STYLE_ACCENT)
+    table.add_column("Uso", justify="right")
+    table.add_column('Consumo', min_width = 22)
+    table.add_column("%", justify="right")
+    table.add_column("Restante", justify="right")
 
     for item in summary:
-        restante_style = "bold red" if item["remaining"] == 0 else STYLE_ACCENT
-        table.add_row(
-            item["model"],
-            str(item["used"]),
-            str(item["limit"]),
-            Text(str(item["remaining"]), style=restante_style),
-        )
+          used = item["used"]
+          limit = item["limit"]
+          remaining = item["remaining"]
+
+          percentage = (used / limit * 100) if limit else 0
+          completed = min(used, limit)
+
+          if percentage >= 80:
+              bar_style = "red"
+              percentage_style = "bold red"
+          elif percentage >= 50:
+              bar_style = "yellow"
+              percentage_style = "bold yellow"
+          else:
+              bar_style = "green"
+              percentage_style = "bold green"
+
+          progress_bar = ProgressBar(
+              total=limit,
+              completed=completed,
+              width=20,
+              style="grey23",
+              complete_style=bar_style,
+              finished_style=bar_style,
+          )
+
+          remaining_style = "bold red" if remaining == 0 else STYLE_ACCENT
+
+          table.add_row(
+              item["model"],
+              f"{used}/{limit}",
+              progress_bar,
+              Text(f"{percentage:.0f}%", style=percentage_style),
+              Text(str(remaining), style=remaining_style),
+          )
 
     console.print(
         Panel(
