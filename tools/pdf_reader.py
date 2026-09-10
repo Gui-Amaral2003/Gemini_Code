@@ -147,6 +147,9 @@ def search_in_pdf(path: str, query: str, max_matches: int = 20) -> str:
     de cada ocorrência, limitado a max_matches. Útil para localizar um trecho
     específico sem precisar ler o documento inteiro.
     """
+    if query == "" or query.isspace():
+        return "A query de busca não pode ser vazia."
+    
     file_path, error = _validate_pdf_path(path)
     if error:
         return error
