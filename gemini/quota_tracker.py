@@ -14,7 +14,7 @@ separado, não aqui.
 Cada tentativa REAL de request à API conta contra a cota, mesmo que
 falhe (erro 400/500) — mesmo critério documentado pelo Google. Por isso
 o registro acontece no ponto onde o request de fato é disparado
-(gemini/client.py::_create_interaction), não só em caso de sucesso.
+(gemini/model_gateway.py), não só em caso de sucesso.
 """
 
 import json

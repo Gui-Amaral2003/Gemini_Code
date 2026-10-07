@@ -39,3 +39,26 @@ def test_policy_timeout_must_be_positive(monkeypatch):
 
     with pytest.raises(RuntimeError, match="timeouts inválidos"):
         registry._assert_consistency()
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("requires_session_created_file", ""),
+        ("requires_session_created_file", 123),
+        ("registers_session_created_file", "   "),
+        ("registers_session_created_file", []),
+    ],
+)
+def test_session_file_policy_fields_must_be_non_empty_strings(
+    monkeypatch, field, value
+):
+    policy = registry.TOOL_POLICIES["read_file"]
+    monkeypatch.setitem(
+        registry.TOOL_POLICIES,
+        "read_file",
+        replace(policy, **{field: value}),
+    )
+
+    with pytest.raises(RuntimeError, match="campos de arquivo da sessão inválidos"):
+        registry._assert_consistency()

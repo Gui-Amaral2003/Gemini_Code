@@ -1,5 +1,4 @@
 import json
-from threading import Event
 from types import SimpleNamespace
 
 import pytest
@@ -7,6 +6,7 @@ import pytest
 import gemini.client as client_module
 from gemini.client import GeminiClient
 from gemini.exceptions import GeminiTimeoutError
+from gemini.models import ActivityEvent
 from tools.registry import ToolPolicy
 
 
@@ -86,22 +86,30 @@ class FakeGenAIClient:
 def make_client(tmp_path):
     """
     Cria um GeminiClient real (retry/fallback/cache/roteamento intactos),
-    com gc.client substituído por um FakeGenAIClient programável e todos
+    com FakeGenAIClient injetado e todos
     os arquivos de log/cache isolados em tmp_path (evita colisão entre
     testes e com arquivos reais do projeto).
     """
+    clients = []
+
     def _make(responses, **kwargs):
+        fake_api = FakeGenAIClient(responses)
         gc = GeminiClient(
             api_key="fake-key",
+            api_client=fake_api,
             usage_log_path=tmp_path / "usage.jsonl",
             trace_log_path=tmp_path / "trace.jsonl",
             cache_path=tmp_path / "cache.json",
             quota_path=tmp_path / "quota.json",
             **kwargs,
         )
-        gc.client = FakeGenAIClient(responses)
+        clients.append(gc)
         return gc
-    return _make
+
+    yield _make
+
+    for gc in clients:
+        gc.close()
 
 
 @pytest.fixture(autouse=True)
@@ -447,6 +455,30 @@ def test_activity_callback_failure_does_not_abort_request(make_client):
     assert response.activities[-1].type == "response_completed"
 
 
+def test_activity_compatibility_properties_delegate_to_recorder(make_client, tmp_path):
+    gc = make_client([])
+    activities = [ActivityEvent("custom", "evento", 1.0)]
+    new_trace_path = tmp_path / "other-trace.jsonl"
+
+    gc.last_activities = activities
+    gc.trace_log_path = new_trace_path
+
+    assert gc.last_activities is activities
+    assert gc.activity_recorder.last_activities is activities
+    assert gc.trace_log_path == new_trace_path
+    assert gc.activity_recorder.trace_log_path == new_trace_path
+
+
+def test_close_delegates_to_tool_executor(make_client, monkeypatch):
+    gc = make_client([])
+    calls = []
+    monkeypatch.setattr(gc.tool_executor, "close", lambda wait=True: calls.append(wait))
+
+    gc.close(wait=False)
+
+    assert calls == [False]
+
+
 def test_tool_limit_counts_rounds_instead_of_individual_calls(make_client, monkeypatch):
     executed = []
 
@@ -523,58 +555,4 @@ def test_confirming_tool_limit_extends_it_by_a_full_block(make_client, monkeypat
     assert [event.type for event in gc.last_activities] == [
         "budget_exceeded",
         "budget_extended",
-    ]
-
-
-def test_tool_policy_timeout_override_returns_error(make_client, monkeypatch):
-    release_tool = Event()
-
-    def slow_tool():
-        release_tool.wait()
-        return "concluída em background"
-
-    monkeypatch.setattr(
-        client_module,
-        "TOOL_POLICIES",
-        {"slow_tool": ToolPolicy("slow_tool", slow_tool, timeout_seconds=0.01)},
-    )
-    gc = make_client([])
-
-    try:
-        result = gc._execute_tool_call(make_function_call_step("slow_tool", {}))
-    finally:
-        release_tool.set()
-
-    assert "excedeu o tempo limite" in result["error"]
-    assert [event.type for event in gc.last_activities] == [
-        "tool_started",
-        "tool_failed",
-    ]
-
-
-def test_confirmation_policy_bypasses_timeout_executor(make_client, monkeypatch):
-    monkeypatch.setattr(
-        client_module,
-        "TOOL_POLICIES",
-        {
-            "confirmed_tool": ToolPolicy(
-                "confirmed_tool",
-                lambda: "executada diretamente",
-                requires_confirmation=True,
-            )
-        },
-    )
-    gc = make_client([])
-    gc._tool_executor = SimpleNamespace(
-        submit=lambda *_args, **_kwargs: pytest.fail(
-            "tool com confirmação não deve entrar no executor"
-        )
-    )
-
-    result = gc._execute_tool_call(make_function_call_step("confirmed_tool", {}))
-
-    assert result == "executada diretamente"
-    assert [event.type for event in gc.last_activities] == [
-        "tool_started",
-        "tool_completed",
     ]

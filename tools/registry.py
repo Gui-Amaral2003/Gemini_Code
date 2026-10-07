@@ -74,11 +74,15 @@ class ToolPolicy:
     # None quando requires_confirmation=True: essas tools não entram no wrapper
     # de timeout porque aguardam interação humana dentro da própria função.
     timeout_seconds: Optional[float] = None
+    # Nome do argumento que deve apontar para um arquivo criado nesta sessão.
+    requires_session_created_file: Optional[str] = None
+    # Nome do campo do resultado que contém um arquivo criado nesta sessão.
+    registers_session_created_file: Optional[str] = None
 
 TOOL_POLICIES: dict[str, ToolPolicy] = {
     "read_file": ToolPolicy("read_file", read_file, routing=ToolRouting.EXPLORATORY),
-    "create_file": ToolPolicy("create_file", create_file, requires_confirmation=True, routing=ToolRouting.EXPLORATORY),
-    "run_script": ToolPolicy("run_script", run_script, requires_confirmation=True, routing=ToolRouting.EXPLORATORY),
+    "create_file": ToolPolicy("create_file", create_file, requires_confirmation=True, routing=ToolRouting.EXPLORATORY, registers_session_created_file="file_path"),
+    "run_script": ToolPolicy("run_script", run_script, requires_confirmation=True, routing=ToolRouting.EXPLORATORY, requires_session_created_file="path"),
     "query_table": ToolPolicy("query_table", query_table, routing=ToolRouting.EXPLORATORY),
     "update_table": ToolPolicy("update_table", update_table, requires_confirmation=True, routing=ToolRouting.TERMINAL),
     "delete_table_rows": ToolPolicy("delete_table_rows", delete_table_rows, requires_confirmation=True, routing=ToolRouting.TERMINAL),
@@ -139,6 +143,20 @@ def _assert_consistency() -> None:
         for key, policy in TOOL_POLICIES.items()
         if policy.requires_confirmation and policy.timeout_seconds is not None
     }
+    invalid_session_file_fields = {
+        key: {
+            "requires": policy.requires_session_created_file,
+            "registers": policy.registers_session_created_file,
+        }
+        for key, policy in TOOL_POLICIES.items()
+        if any(
+            value is not None and (not isinstance(value, str) or not value.strip())
+            for value in (
+                policy.requires_session_created_file,
+                policy.registers_session_created_file,
+            )
+        )
+    }
 
     if (
         definition_names != policy_names
@@ -146,6 +164,7 @@ def _assert_consistency() -> None:
         or invalid_functions
         or invalid_timeouts
         or confirmation_timeouts
+        or invalid_session_file_fields
     ):
         faltando_policy = definition_names - policy_names
         faltando_definition = policy_names - definition_names
@@ -156,7 +175,8 @@ def _assert_consistency() -> None:
             f"nomes divergentes: {mismatched_names}, "
             f"funções inválidas: {invalid_functions}, "
             f"timeouts inválidos: {invalid_timeouts}, "
-            f"tools de confirmação com timeout: {confirmation_timeouts}"
+            f"tools de confirmação com timeout: {confirmation_timeouts}, "
+            f"campos de arquivo da sessão inválidos: {invalid_session_file_fields}"
         )
 
 _assert_consistency()

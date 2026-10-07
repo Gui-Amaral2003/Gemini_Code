@@ -1,15 +1,8 @@
-# TODO: substituir o timeout baseado em ThreadPoolExecutor por políticas
-# específicas por ferramenta. future.result(timeout=...) interrompe apenas
-# a espera; uma função já iniciada continua executando em background.
-# Priorizar timeouts nativos para HTTP, banco de dados e subprocessos,
-# além de definir o ciclo de vida e shutdown do executor.
 from __future__ import annotations
 
-import httpx
 import uuid
 import json
 import logging
-import random
 import time
 from pathlib import Path
 from typing import Optional, Callable
@@ -17,8 +10,6 @@ from typing import Optional, Callable
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
-
-from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 
 from tools import TOOL_DEFINITIONS, TOOL_POLICIES
 from tools.confirmation import confirm_action
@@ -39,7 +30,9 @@ from .exceptions import GeminiTimeoutError
 from .model_routing import all_terminal
 from .models import ActivityEvent, GeminiResponse
 from .quota_tracker import QuotaTracker
-from .rate_limits import RateLimitKind, classify_rate_limit
+from .activity import ActivityRecorder
+from .model_gateway import ModelGateway, ModelRequest
+from .tool_executor import ToolExecutor, ToolExecutionContext
 
 try:
     from dotenv import load_dotenv
@@ -54,13 +47,6 @@ if not logger.handlers:
     handler.setFormatter(logging.Formatter("%(asctime)s - %(levelname)s - %(message)s"))
     logger.addHandler(handler)
 logger.setLevel(logging.INFO)
-
-# httpx.TimeoutException cobre ReadTimeout/ConnectTimeout/WriteTimeout/PoolTimeout.
-# RemoteProtocolError entra porque, na prática (relatos do próprio fórum do
-# Gemini), um timeout de servidor às vezes aparece como "server disconnected
-# without sending a response" em vez de uma exceção de timeout limpa — mesma
-# causa raiz, tratamento igual (não retenta, mensagem clara).
-_TIMEOUT_HTTP_ERRORS = (httpx.TimeoutException, httpx.RemoteProtocolError)
 
 class GeminiClient:
     """
@@ -83,8 +69,9 @@ class GeminiClient:
         cache_path: Path | str = DEFAULT_CACHE_PATH,
         fallback_models: Optional[list[str]] = None,
         cheap_model: Optional[str] = None,
+        api_client=None,
     ):
-        self.client = (
+        sdk_client = api_client or (
             genai.Client(
                 api_key=api_key,
                 http_options=types.HttpOptions(
@@ -113,44 +100,75 @@ class GeminiClient:
 
         # gemini_usage_log.jsonl — 1 linha por generate() COMPLETO, com tokens agregados de todas as tentativas internas. Fonte de custo/consumo (alimenta session_summary()/`/tokens`). Ver _log_usage().
         self.usage_log_path = Path(usage_log_path)
-        # interaction_trace_log.jsonl — 1 linha por TENTATIVA individual de chamada ao modelo dentro de _create_with_fallback (início e depois sucesso/erro), correlacionadas por call_id. Existe só para diagnóstico de latência/hang entre chamadas — NÃO é fonte de custo (isso é o usage log acima) e é sempre gravado, independente do nível do logger (`/logs` oculto não afeta este arquivo). Ver _log_trace_attempt().
-        self.trace_log_path = Path(trace_log_path)
+        # gemini_trace_log.jsonl — 1 linha por tentativa individual de chamada ao modelo, gravada pelo ActivityRecorder e correlacionada por call_id.
         self.quota = QuotaTracker(quota_path)
         self.max_retries = max_retries
         self.cache = PromptCache(cache_path) if use_cache else None
         self._thought_callback: Optional[Callable[[str], None]] = None
-        self._activity_callback: Optional[Callable[[ActivityEvent], None]] = None
-        self.last_activities: list[ActivityEvent] = []
+        self.activity_recorder = ActivityRecorder(trace_log_path)
         self.show_thoughts: bool = False
+
+        self.model_gateway = ModelGateway(
+            api_client=sdk_client,
+            default_model=self.default_model,
+            fallback_models=self.fallback_models,
+            quota_tracker=self.quota,
+            emit_activity=self._emit_activity,
+            trace_attempt=self.activity_recorder.trace_model_attempt,
+            confirm_quota_override=confirm_action,
+            request_timeout=DEFAULT_API_CALL_TIMEOUT_SECONDS,
+            sleep=time.sleep,
+        )
 
         self._session_input_tokens = 0
         self._session_output_tokens = 0
         self._session_calls = 0
         self._session_cache_hits = 0
 
-        # Reiniciado a cada generate() — arquivos gerados por tools nesta chamada.
-        self._current_generated_files: list[Path] = []
-        self._created_files_this_session: set[Path] = set()
+        self.tool_executor = ToolExecutor(
+            policies = TOOL_POLICIES,
+            emit_activity = self._emit_activity,
+            default_timeout = MAX_TOOL_EXEC_SECONDS,
+        )
+        # context.created_files vive durante toda a sessão do client;
+        # context.generated_files é reiniciado a cada tentativa dentro de
+        # generate() (ver loop de retry abaixo) — mesmo objeto, ciclos de vida
+        # diferentes por campo (ver docstring de ToolExecutionContext).
+        self._tool_context = ToolExecutionContext()
 
-        # Pool para o wrapper de timeout de execução de tool (ver _execute_tool_call). Vive durante toda a sessão do client — uma thread abandonada por timeout continua rodando até terminar sozinha (Python não mata threads à força), então em uso normal isso deve ser raro o suficiente pra não preocupar. Sem shutdown explícito por decisão consciente.
-        self._tool_executor = ThreadPoolExecutor(max_workers = 4)
+    @property
+    def client(self):
+        """Compatibilidade temporária: cliente SDK utilizado pelo ModelGateway."""
+        return self.model_gateway.api_client
 
+    @client.setter
+    def client(self, api_client) -> None:
+        """Permite substituir o SDK sem criar uma referência divergente."""
+        self.model_gateway.api_client = api_client
+
+    @property
+    def last_activities(self) -> list[ActivityEvent]:
+        """Eventos emitidos durante a última chamada a generate() (delegado ao ActivityRecorder)."""
+        return self.activity_recorder.last_activities
+
+    @last_activities.setter
+    def last_activities(self, activities: list[ActivityEvent]) -> None:
+        """Mantém compatibilidade com consumidores que substituem a lista diretamente."""
+        self.activity_recorder.last_activities = activities
+
+    @property
+    def trace_log_path(self) -> Path:
+        """Caminho do trace, cuja fonte de verdade pertence ao ActivityRecorder."""
+        return self.activity_recorder.trace_log_path
+
+    @trace_log_path.setter
+    def trace_log_path(self, path: Path | str) -> None:
+        """Atualiza o destino utilizado pelo recorder para as próximas tentativas."""
+        self.activity_recorder.trace_log_path = Path(path)
 
     def _emit_activity(self, event_type: str, message: str, **kwargs) -> ActivityEvent:
-        """Registra um evento e o envia para a UI sem acoplar o cliente ao terminal."""
-        event = ActivityEvent(
-            type=event_type,
-            message=message,
-            timestamp=time.time(),
-            **kwargs,
-        )
-        self.last_activities.append(event)
-        if self._activity_callback:
-            try:
-                self._activity_callback(event)
-            except Exception:
-                logger.exception("Erro no callback de atividade; execucao continuara.")
-        return event
+        """Wrapper sobre ActivityRecorder.emit — mantém as chamadas internas existentes sem alteração."""
+        return self.activity_recorder.emit(event_type, message, **kwargs)
 
     def _process_thoughts(self, interaction) -> list[str]:
         """
@@ -188,217 +206,6 @@ class GeminiClient:
             if getattr(step, "type", None) == "function_call"
         ]
 
-    def _execute_tool_call(self, step) -> object:
-        tool_name = step.name
-        arguments = step.arguments or {}
-        started_at = time.perf_counter()
-        self._emit_activity(
-            "tool_started",
-            f"Executando {tool_name}",
-            tool=tool_name,
-        )
-
-        logger.info("Gemini solicitou ferramenta '%s' com argumentos: %s", tool_name, arguments)
-
-        policy = TOOL_POLICIES.get(tool_name)
-        if policy is None:
-            self._emit_activity(
-                "tool_failed",
-                f"Ferramenta {tool_name} nao registrada",
-                tool=tool_name,
-                duration=time.perf_counter() - started_at,
-            )
-            return {
-                "error": (
-                    f"Ferramenta '{tool_name}' não está registrada. "
-                    f"Disponíveis: {list(TOOL_POLICIES)}"
-                )
-            }
-
-        function = policy.function
-
-        try:
-            # run_script só pode executar arquivos criados nesta sessão através de create_file.
-            if tool_name == "run_script":
-                requested_path = Path(arguments.get("path", "")).resolve()
-
-                if requested_path not in self._created_files_this_session:
-                    self._emit_activity(
-                        "tool_failed",
-                        "Execucao de script bloqueada pela politica de seguranca",
-                        tool=tool_name,
-                        duration=time.perf_counter() - started_at,
-                    )
-                    return {
-                        "error": (
-                            "Execução bloqueada. Só é permitido executar scripts "
-                            "criados nesta sessão através da ferramenta create_file."
-                        )
-                    }
-
-            if policy.requires_confirmation:
-                # Sem wrapper de timeout — o confirm_action/confirm_action_typed de dentro da função espera o humano, e não há como interromper essa espera sem risco de execução "fantasma" concorrente.
-                result = function(**arguments)
-            else:
-                timeout = (
-                    policy.timeout_seconds
-                    if policy.timeout_seconds is not None
-                    else MAX_TOOL_EXEC_SECONDS
-                )
-                future = self._tool_executor.submit(function, **arguments)
-                try:
-                    result = future.result(timeout=timeout)
-                except FutureTimeoutError:
-                    future.cancel()
-                    logger.warning(
-                        "Ferramenta '%s' excedeu %ds e foi abandonada (a "
-                        "execução pode continuar rodando em background).",
-                        tool_name, timeout,
-                    )
-                    self._emit_activity(
-                        "tool_failed",
-                        f"Ferramenta {tool_name} excedeu {timeout}s",
-                        tool=tool_name,
-                        duration=time.perf_counter() - started_at,
-                    )
-                    return {
-                        "error": (
-                            f"A ferramenta '{tool_name}' excedeu o tempo limite de "
-                            f"execução ({timeout}s) e a espera foi abandonada. "
-                            "Considere refinar o filtro/parâmetros para reduzir o "
-                            "volume de dados processado."
-                        )
-                    }
-
-            logger.info("Ferramenta '%s' executada com sucesso.", tool_name)
-            self._emit_activity(
-                "tool_completed",
-                f"Ferramenta {tool_name} concluida",
-                tool=tool_name,
-                duration=time.perf_counter() - started_at,
-            )
-
-            # TODO: mover esta regra de ciclo de vida da sessão para ToolPolicy.
-            # Registra arquivos criados pelo create_file.
-            if (tool_name == "create_file" and isinstance(result, dict) and result.get("success") and result.get("file_path")):
-                created_path = Path(result["file_path"]).resolve()
-
-                self._created_files_this_session.add(created_path)
-
-                logger.info(
-                    "Arquivo criado nesta sessão registrado: %s",
-                    created_path,
-                )
-
-            # Gerar arquivos de ferramentas de plotagem (ex: gráficos) para propagar no GeminiResponse.
-            if (policy.generate_file and isinstance(result, dict) and result.get("file_path")):
-                file_path = Path(result["file_path"])
-                self._current_generated_files.append(file_path)
-
-                logger.info("Arquivo gerado por '%s' registrado: %s", tool_name, file_path)
-
-            return result
-
-        except Exception as e:
-            logger.exception("Erro ao executar ferramenta '%s'.", tool_name)
-            self._emit_activity(
-                "tool_failed",
-                f"Falha em {tool_name}: {e}",
-                tool=tool_name,
-                duration=time.perf_counter() - started_at,
-            )
-            return {"error": str(e)}
-
-    def _create_interaction(
-        self,
-        *,
-        model: str,
-        input,
-        tools=None,
-        previous_interaction_id=None,
-        system_instruction=None,
-        generation_config=None,
-        max_retries: int = 2,
-    ):
-        last_error = None
-
-        for attempt in range(max_retries + 1):
-            attempt_started_at = time.perf_counter()
-            self._emit_activity(
-                "api_attempt_started",
-                f"Consultando {model} (tentativa {attempt + 1})",
-                model=model,
-                details={"attempt": attempt + 1, "max_attempts": max_retries + 1},
-            )
-            try:
-                create_kwargs = {
-                    "model": model,
-                    "input": input,
-                    "tools": tools,
-                    "previous_interaction_id": previous_interaction_id,
-                    'timeout': DEFAULT_API_CALL_TIMEOUT_SECONDS,  # timeout por chamada em segundos
-                }
-
-                if system_instruction is not None:
-                    create_kwargs["system_instruction"] = system_instruction
-                if generation_config:
-                    create_kwargs["generation_config"] = generation_config
-
-                # Conta contra o RPD mesmo se a chamada falhar — mesmo
-                # critério do Google (erro 400/500 ainda consome cota).
-                self.quota.register_call(model)
-
-
-                interaction = self.client.interactions.create(**create_kwargs)
-                self._emit_activity(
-                    "api_attempt_completed",
-                    f"Resposta recebida de {model}",
-                    model=model,
-                    duration=time.perf_counter() - attempt_started_at,
-                    details={"attempt": attempt + 1},
-                )
-                return interaction
-
-            except Exception as error:
-                last_error = error
-                self._emit_activity(
-                    "api_attempt_failed",
-                    f"Falha em {model}: {error}",
-                    model=model,
-                    duration=time.perf_counter() - attempt_started_at,
-                    details={"attempt": attempt + 1},
-                )
-
-                if isinstance(error, _TIMEOUT_HTTP_ERRORS):
-                    raise GeminiTimeoutError(
-                        f"A chamada a {model} excedeu o timeout configurado "
-                        f"({DEFAULT_API_CALL_TIMEOUT_SECONDS}s) ou a conexão foi "
-                        "interrompida pelo servidor antes de responder. Nenhuma "
-                        "nova tentativa automática será feita."
-                    ) from error
-                
-                rate_limit = classify_rate_limit(error)
-                if rate_limit.kind is RateLimitKind.NOT_RATE_LIMIT:
-                    raise
-                # Cota diaria não melhora com backoff. Um 429 desconhecido tambem nao justifica gastar outra chamada no mesmo modelo.
-                if rate_limit.kind is not RateLimitKind.TRANSIENT:
-                    raise
-                if attempt >= max_retries:
-                    raise
-
-                delay = rate_limit.retry_after_seconds
-                if delay is None:
-                    delay = min(2 ** attempt, 10) + random.uniform(0, 0.5)
-                self._emit_activity(
-                    "rate_limit_backoff",
-                    f"Limite atingido em {model}; aguardando {delay:.2f}s antes de tentar de novo",
-                    model=model,
-                    duration=delay,
-                )
-                time.sleep(delay)
-
-        raise last_error
-
     def _create_with_fallback(
         self,
         *,
@@ -411,89 +218,19 @@ class GeminiClient:
         call_id: Optional[str] = None,
         stage: str = 'unknown',
     ):
-        last_error = None
-        models_to_try = []
-
-        for candidate in [preferred_model, self.default_model, *self.fallback_models]:
-            if candidate and candidate not in models_to_try:
-                models_to_try.append(candidate)
-
-        # Cota diária (RPD) estimada localmente — pula modelos já esgotados
-        # hoje antes mesmo de tentar (ver gemini/quota_tracker.py). É uma
-        # estimativa própria, não o limite real do Google.
-        available_models = [m for m in models_to_try if not self.quota.is_exhausted(m)]
-        exhausted_models = [m for m in models_to_try if m not in available_models]
-
-        if exhausted_models:
-            self._emit_activity(
-                "models_skipped",
-                "Modelos ignorados por cota local: " + ", ".join(exhausted_models),
-                details={"models": exhausted_models},
-            )
-            logger.info(
-                "Modelo(s) com cota diária estimada esgotada, pulando: %s",
-                ", ".join(exhausted_models),
-            )
-
-        if not available_models:
-            detalhe = ", ".join(
-                f"{m} ({self.quota.used_today(m)}/{self.quota.limit(m)})"
-                for m in models_to_try
-            )
-            mensagem = (
-                f"⚠ Todos os modelos configurados atingiram a cota diária (RPD) "
-                f"estimada localmente: {detalhe}.\n\n"
-                "Isso é uma estimativa própria — a API do Gemini não expõe cota "
-                "real, então pode estar desatualizada. Tentar mesmo assim?"
-            )
-            if not confirm_action(mensagem):
-                raise RuntimeError(
-                    "Cota diária estimada esgotada para todos os modelos "
-                    "configurados. Operação cancelada pelo usuário."
-                )
-            # Usuário decidiu contornar o bloqueio local.
-            available_models = models_to_try
-
-        for model in available_models:
-            self._emit_activity(
-                "model_selected",
-                f"Modelo selecionado: {model}",
-                model=model,
+        result = self.model_gateway.create(
+            ModelRequest(
+                input=input,
+                tools=tools,
+                preferred_model=preferred_model,
+                previous_interaction_id=previous_interaction_id,
+                system_instruction=system_instruction,
+                generation_config=generation_config,
+                call_id=call_id,
                 stage=stage,
             )
-            if call_id:
-                self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="start")
-            try:
-                interaction = self._create_interaction(
-                    model=model,
-                    input=input,
-                    tools=tools,
-                    previous_interaction_id=previous_interaction_id,
-                    system_instruction=system_instruction,
-                    generation_config=generation_config,
-                )
-
-                if call_id:
-                    self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="success")
-                return interaction, model
-            
-            except Exception as error:
-                last_error = error
-                if call_id:
-                    self._log_trace_attempt(call_id=call_id, stage=stage, model=model, phase="failure", error=str(error))
-                if classify_rate_limit(error).kind is not RateLimitKind.NOT_RATE_LIMIT:
-                    self._emit_activity(
-                        "fallback_selected",
-                        f"Limite de {model}; tentando o proximo modelo",
-                        model=model,
-                        stage=stage,
-                    )
-                    continue
-                raise
-
-        raise RuntimeError(
-            "Todos os modelos configurados atingiram o limite de uso."
-        ) from last_error
+        )
+        return result.interaction, result.model
 
     def set_thought_callback(self, callback: Callable[[str], None]) -> None:
         """
@@ -504,11 +241,10 @@ class GeminiClient:
         """
         self._thought_callback = callback
 
-    def set_activity_callback(
-        self, callback: Optional[Callable[[ActivityEvent], None]]
-    ) -> None:
+
+    def set_activity_callback(self, callback: Optional[Callable[[ActivityEvent], None]]) -> None:
         """Registra o consumidor dos eventos operacionais de ``generate``."""
-        self._activity_callback = callback
+        self.activity_recorder.set_callback(callback)
 
     def set_thinking_enabled(self, enabled: bool) -> None:
         """
@@ -517,11 +253,19 @@ class GeminiClient:
         """
         self.show_thoughts = enabled
 
+    def close(self, wait: bool = True) -> None:
+        """Libera os recursos internos usados para execução de ferramentas."""
+        self.tool_executor.close(wait=wait)
+
+    def __enter__(self) -> "GeminiClient":
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        self.close()
+
     def count_tokens(self, prompt: str, model: Optional[str] = None) -> int:
         """Conta o número de tokens que seriam usados para gerar uma resposta."""
-        model = model or self.default_model
-        result = self.client.models.count_tokens(model=model, contents=prompt)
-        return result.total_tokens
+        return self.model_gateway.count_tokens(prompt, model)
 
     def generate(
         self,
@@ -535,7 +279,7 @@ class GeminiClient:
         use_cache: Optional[bool] = None,
     ) -> GeminiResponse:
         generate_started_at = time.perf_counter()
-        self.last_activities = []
+        self.activity_recorder.reset()
         self._emit_activity("request_started", "Preparando solicitacao")
         if not prompt or not prompt.strip():
             raise ValueError("O prompt não pode ser vazio.")
@@ -599,7 +343,7 @@ class GeminiClient:
         while True:
             attempt += 1
             # Reinicia o rastreamento de arquivos gerados a cada tentativa — se essa tentativa falhar e for reexecutada, não queremos arrastar arquivos órfãos de uma tentativa anterior que não chegou a completar.
-            self._current_generated_files = []
+            self._tool_context.generated_files = []
             tool_rounds = 0
             tool_round_limit = MAX_TOOL_ROUNDS
             try:
@@ -647,7 +391,7 @@ class GeminiClient:
                     tool_names_this_round = []
 
                     for step in function_calls:
-                        result = self._execute_tool_call(step)
+                        result = self.tool_executor.execute(step, self._tool_context)
                         tool_names_this_round.append(step.name)
                         function_results.append(
                             {
@@ -720,7 +464,7 @@ class GeminiClient:
                     output_tokens=accumulated_output_tokens,
                     total_tokens=accumulated_total_tokens,
                     api_calls=api_calls_made,
-                    generated_files=list(self._current_generated_files),
+                    generated_files=list(self._tool_context.generated_files),
                     thoughts=accumulated_thoughts,
                     duration=time.perf_counter() - generate_started_at,
                 )
@@ -841,30 +585,6 @@ class GeminiClient:
             details={"tool_rounds": tool_rounds, "tool_round_limit": extended_limit},
         )
         return extended_limit
-
-    def _log_trace_attempt(self, *, call_id: str, stage: str, model: str, phase: str, error: Optional[str] = None) -> None:
-        """
-        Grava uma tentativa individual de chamada ao modelo no trace log.
-        stage identifica em qual ponto do fluxo de generate() a tentativa
-        ocorreu: "initial", "tool_continuation", "cheap_synthesis" ou
-        "strong_fallback". phase é "start", "success" ou "error".
-        """
-        entry = {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "call_id": call_id,
-            "stage": stage,
-            "model": model,
-            "phase": phase,
-        }
-        if error is not None:
-            entry['error'] = error
-
-        try:
-            self.trace_log_path.parent.mkdir(parents = True, exist_ok = True)
-            with open(self.trace_log_path, "a", encoding="utf-8") as f:
-                f.write(json.dumps(entry, ensure_ascii = False, default = str) + '\n')
-        except OSError as e:
-            logger.warning("Não consegui gravar o log de rastreio em %s: %s", self.trace_log_path, e)
 
     def _log_usage(self, response: GeminiResponse, cached: bool = False) -> None:
         self._session_input_tokens += response.input_tokens

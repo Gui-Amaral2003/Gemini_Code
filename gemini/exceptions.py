@@ -9,3 +9,12 @@ class GeminiTimeoutError(RuntimeError):
     estourou, ou o usuário já disse "não continua", uma nova tentativa
     automática só repetiria o mesmo problema.
     """
+
+
+class ModelFallbackExhausted(RuntimeError):
+    """Todos os modelos elegíveis falharam por limite de uso."""
+
+    def __init__(self, attempted_models: list[str], last_error: Exception | None):
+        self.attempted_models = list(attempted_models)
+        self.last_error = last_error
+        super().__init__("Todos os modelos configurados atingiram o limite de uso.")

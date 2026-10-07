@@ -391,6 +391,8 @@ print(response.text)
 │   ├── rate_limits.py          # Classificação de 429 diário, transitório ou desconhecido
 │   ├── env_config.py           # Catálogo e persistência das variáveis do .env
 │   ├── config_wizard.py        # Interface do assistente /config
+│   ├── tool_executor.py        # Execução, timeout e contexto de arquivos das tools
+│   ├── model_gateway.py        # SDK, timeout, retry, quota, trace e fallback de modelos
 │   ├── chat_sessions.json      # Histórico persistente das sessões (gerado localmente)
 │   ├── gemini_cache.json       # Cache local de respostas (gerado localmente)
 │   ├── gemini_usage_log.jsonl  # Log local de uso da API (gerado localmente)

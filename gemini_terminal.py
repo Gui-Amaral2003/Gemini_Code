@@ -198,6 +198,7 @@ def main(argv=None):
                 continue
 
             if user_input == "/exit":
+                client.close()
                 console.print(Panel("See You Space Cowboy...", style=STYLE_SYSTEM, box=box.ROUNDED))
                 break
 
@@ -318,6 +319,7 @@ def main(argv=None):
                 handle_generated_files(response.generated_files)
 
         except (KeyboardInterrupt, EOFError):
+            client.close()
             console.print(Panel("Encerrando...", style=STYLE_SYSTEM, box=box.ROUNDED))
             break
 
