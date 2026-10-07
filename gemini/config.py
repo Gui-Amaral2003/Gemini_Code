@@ -3,6 +3,8 @@ from pathlib import Path
 from google.genai import errors as genai_errors
 import ssl
 
+PACKAGE_DIR = Path(__file__).resolve().parent
+
 RETRYABLE_ERRORS = (
     genai_errors.ServerError,
     ConnectionError,
@@ -13,7 +15,10 @@ RETRYABLE_ERRORS = (
 DEFAULT_MODEL = "gemini-3.8-flash"
 DEFAULT_USAGE_LOG_PATH = Path('gemini/gemini_usage_log.jsonl')
 DEFAULT_CACHE_PATH = Path('gemini/gemini_cache.json')
-DEFAULT_SESSIONS_PATH = Path('gemini/chat_sessions.json')
+# A persistência de sessões não pode depender do diretório de onde o
+# terminal foi iniciado. Sem uma base absoluta, executar o mesmo script fora
+# da raiz do projeto cria/lê outro arquivo e faz sessões parecerem ausentes.
+DEFAULT_SESSIONS_PATH = PACKAGE_DIR / "chat_sessions.json"
 DEFAULT_TRACE_LOG_PATH = Path('gemini/gemini_trace_log.jsonl')
 DEFAULT_QUOTA_PATH = Path('gemini/quota_tracker.json')
 

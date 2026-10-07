@@ -15,6 +15,22 @@ from .models import GeminiResponse, Message
 logger = logging.getLogger("gemini_client")
 
 # Reconstrução de contexto quando o interaction_id some do servidor.
+REPLAY_MAX_MESSAGES = 20
+REPLAY_MAX_CHARS_PER_MESSAGE = 2000
+
+# Heurística para reconhecer "a interação anterior não existe mais". Ainda NÃO
+# confirmada contra a API real: force um previous_interaction_id inválido,
+# veja o que o SDK levanta (code + mensagem) e ajuste estes valores.
+_EXPIRED_ERROR_CODES = (400, 404)
+_INTERACTION_REFERENCE_MARKERS = (
+    "previous_interaction",
+    "previous interaction",
+    "interaction_id",
+    "interaction id",
+    "interaction",
+)
+_INTERACTION_STATE_MARKERS = ("not found", "expired", "does not exist", "invalid")
+
 
 class ChatSession:
     """
@@ -68,7 +84,13 @@ class ChatSession:
 
     @classmethod
     def list_sessions(cls, sessions_path: Path | str = DEFAULT_SESSIONS_PATH) -> list[dict]:
-        """Lista sessoes persistidas, das mais recentes para as mais antigas."""
+        """
+        Lista sessoes persistidas, das mais recentes para as mais antigas.
+
+        Cada item: session_id, messages (contagem), updated_at, first_user
+        (primeira pergunta) e last_model (ultima resposta) — os dois ultimos
+        alimentam o painel de detalhes da tela /agents.
+        """
         path = Path(sessions_path)
         if not path.exists():
             return []
@@ -81,14 +103,31 @@ class ChatSession:
         if not isinstance(saved_sessions, dict):
             return []
 
-        sessions = [
-            {
+        sessions = []
+        for session_id, data in saved_sessions.items():
+            if not isinstance(data, dict):
+                sessions.append(
+                    {"session_id": session_id, "messages": 0, "updated_at": None,
+                     "first_user": "", "last_model": ""}
+                )
+                continue
+
+            raw_messages = data.get("messages", [])
+            if not isinstance(raw_messages, list):
+                raw_messages = []
+            messages = [m for m in raw_messages if isinstance(m, dict)]
+            sessions.append({
                 "session_id": session_id,
-                "messages": len(data.get("messages", [])) if isinstance(data, dict) else 0,
-                "updated_at": data.get("updated_at") if isinstance(data, dict) else None,
-            }
-            for session_id, data in saved_sessions.items()
-        ]
+                "messages": len(messages),
+                "updated_at": data.get("updated_at"),
+                "first_user": next(
+                    (m.get("text", "") for m in messages if m.get("role") == "user"), ""
+                ),
+                "last_model": next(
+                    (m.get("text", "") for m in reversed(messages) if m.get("role") == "model"), ""
+                ),
+            })
+
         return sorted(
             sessions,
             key=lambda item: item["updated_at"] or "",

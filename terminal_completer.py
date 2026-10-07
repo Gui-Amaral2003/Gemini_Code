@@ -19,6 +19,7 @@ from tools.filesystem import ALLOWED_SEARCH_DIRS
 
 from gemini.config import DEFAULT_SESSIONS_PATH
 from gemini.session import ChatSession
+from gemini.session_ui import session_key_bindings
 
 HISTORY_PATH = "gemini/prompt_history.txt"
 MIN_CHARS_FILE_COMPLETION = 3
@@ -203,4 +204,5 @@ def build_prompt_session() -> PromptSession:
         history=FileHistory(HISTORY_PATH),
         completer=build_completer(),
         style=PROMPT_STYLE,
+        key_bindings=session_key_bindings(),
     )

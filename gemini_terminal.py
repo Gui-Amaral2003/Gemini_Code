@@ -12,6 +12,7 @@ import logging
 import os
 from gemini import ActivityEvent, GeminiClient, ChatSession
 from gemini.config_wizard import run_wizard, show_status
+from gemini.session_ui import pick_session
 from tools.definitions import TOOL_DEFINITIONS
 from tools.confirmation import set_confirm_callback, set_confirm_typed_callback
 from rich.console import Console
@@ -219,7 +220,7 @@ def main(argv=None):
                 continue
 
             if user_input == "/sessions":
-                print_sessions(chat)
+                chat = open_session_manager(chat, client, prompt_session)
                 continue
 
             if user_input == "/new" or user_input.startswith("/new "):
@@ -366,6 +367,101 @@ def print_error(message: str) -> None:
 def print_system_message(message: str) -> None:
     console.print(Panel(message, style=STYLE_SYSTEM, box=box.ROUNDED))
 
+
+def open_session_manager(chat: ChatSession, client: GeminiClient, prompt_session) -> ChatSession:
+    """Abre o seletor visual e devolve a sessão que deve permanecer ativa."""
+    # Uma segunda Application fullscreen pode receber EOF imediatamente no
+    # console do Windows (inclusive no terminal integrado do VS Code). Nesse
+    # ambiente, o submenu usa a mesma PromptSession do loop principal.
+    if os.name == "nt":
+        result = pick_session_in_prompt(chat, prompt_session)
+    else:
+        result = pick_session(
+            ChatSession.list_sessions(chat.sessions_path),
+            active_id=chat.session_id,
+            input=prompt_session.app.input,
+            output=prompt_session.app.output,
+        )
+    if result is None:
+        return chat
+    action, session_id = result
+
+    if action == "back":
+        return chat
+
+    if action == "new":
+        session_id = (session_id or Prompt.ask("Nome da nova sessão")).strip()
+        if not session_id:
+            print_error("O nome da sessão não pode ser vazio.")
+            return chat
+        if ChatSession.session_exists(session_id, chat.sessions_path):
+            print_error(f"A sessão '{session_id}' já existe. Use /switch {session_id}.")
+            return chat
+
+        new_chat = ChatSession(
+            client=client,
+            session_id=session_id,
+            system_instruction=chat.system,
+            sessions_path=chat.sessions_path,
+        )
+        new_chat.persist()
+        print_system_message(f"Nova sessão ativa: {new_chat.session_id}")
+        return new_chat
+
+    if action == "open" and session_id:
+        if not ChatSession.session_exists(session_id, chat.sessions_path):
+            print_error(f"Sessão '{session_id}' não encontrada.")
+            return chat
+        selected_chat = ChatSession(
+            client=client,
+            session_id=session_id,
+            system_instruction=chat.system,
+            sessions_path=chat.sessions_path,
+        )
+        print_system_message(f"Sessão ativa: {selected_chat.session_id}")
+        return selected_chat
+
+    # Defesa contra um retorno inesperado da camada de UI.
+    print_error(f"Ação de sessão desconhecida: {action}")
+    return chat
+
+
+def pick_session_in_prompt(chat: ChatSession, prompt_session):
+    """Seletor compatível com Windows que reutiliza o prompt principal."""
+    while True:
+        sessions = ChatSession.list_sessions(chat.sessions_path)
+        print_sessions(chat, numbered=True)
+        choice = prompt_session.prompt(
+            HTML(
+                "<prompt>Sessões [n = nova, número/nome = abrir, q = voltar]:</prompt> "
+            )
+        ).strip()
+
+        if not choice or choice.lower() in {"q", "quit", "voltar"}:
+            return ("back", None)
+
+        if choice.lower() in {"n", "new", "nova"}:
+            session_id = prompt_session.prompt(
+                HTML("<prompt>Nome da nova sessão:</prompt> ")
+            ).strip()
+            return ("new", session_id)
+
+        if choice.isdigit():
+            index = int(choice) - 1
+            if 0 <= index < len(sessions):
+                return ("open", sessions[index]["session_id"])
+            print_error("Número de sessão inválido.")
+            continue
+
+        matching_session = next(
+            (item for item in sessions if item["session_id"] == choice),
+            None,
+        )
+        if matching_session:
+            return ("open", matching_session["session_id"])
+
+        print_error(f"Sessão '{choice}' não encontrada.")
+
 def print_help() -> None:
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2))
     table.add_column(style=f"{STYLE_ACCENT} bold")
@@ -374,7 +470,7 @@ def print_help() -> None:
     table.add_row('/config', "Mostra o status da configuração do Gemini")
     table.add_row('/config edit', "Edita a configuração do Gemini")
     table.add_row("/history", "Mostra o histórico local")
-    table.add_row("/sessions", "Lista as sessões persistidas")
+    table.add_row("/sessions", "Abre o gerenciador de sessões")
     table.add_row("/new <nome>", "Cria e ativa uma nova sessão")
     table.add_row("/switch <nome>", "Troca para uma sessão existente")
     table.add_row("/clear", "Limpa a conversa")
@@ -530,33 +626,38 @@ def print_history(chat: ChatSession) -> None:
         else:
             print_response(message.text)
 
-def print_sessions(chat: ChatSession) -> None:
+def print_sessions(chat: ChatSession, numbered: bool = False) -> None:
     sessions = ChatSession.list_sessions(chat.sessions_path)
     if not sessions:
         print_system_message("Nenhuma sessão persistida.")
         return
 
     table = Table(box=box.SIMPLE, expand=True)
+    if numbered:
+        table.add_column("Nº", justify="right", style=STYLE_ACCENT)
     table.add_column("Sessão", style="bold")
     table.add_column("Mensagens", justify="right")
     table.add_column("Atualizada", justify="right", style="dim")
 
-    for item in sessions:
+    for index, item in enumerate(sessions, start=1):
         is_active = item["session_id"] == chat.session_id
         name = Text(item["session_id"])
         if is_active:
             name.append("  ativa", style="bold green")
-        table.add_row(
-            name,
-            str(item["messages"]),
-            item["updated_at"] or "desconhecido",
-        )
+        row = [name, str(item["messages"]), item["updated_at"] or "desconhecido"]
+        if numbered:
+            row.insert(0, str(index))
+        table.add_row(*row)
 
     console.print(
         Panel(
             table,
             title="Sessões",
-            subtitle="[dim]/new <nome> ou /switch <nome>[/dim]",
+            subtitle=(
+                "[dim]n = nova · número/nome = abrir · q = voltar[/dim]"
+                if numbered
+                else "[dim]/new <nome> ou /switch <nome>[/dim]"
+            ),
             border_style=STYLE_ACCENT,
             box=box.ROUNDED,
         )

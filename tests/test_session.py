@@ -22,6 +22,8 @@ def test_persist_cria_sessao_vazia_e_listagem(tmp_path):
             "session_id": "trabalho",
             "messages": 0,
             "updated_at": ChatSession.list_sessions(path)[0]["updated_at"],
+            "first_user": "",
+            "last_model": "",
         }
     ]
 
@@ -41,7 +43,13 @@ def test_list_sessions_le_formato_antigo_sem_updated_at(tmp_path):
     )
 
     assert ChatSession.list_sessions(path) == [
-        {"session_id": "antiga", "messages": 1, "updated_at": None}
+        {
+            "session_id": "antiga",
+            "messages": 1,
+            "updated_at": None,
+            "first_user": "oi",
+            "last_model": "",
+        }
     ]
 
 

@@ -28,6 +28,23 @@ def test_completa_comandos_parciais():
     assert complete("/sw") == ["/switch"]
     assert complete("/n") == ["/new"]
     assert complete("/con") == ["/config"]
+    assert complete("/sess") == ["/sessions"]
+
+
+def test_prompt_session_inclui_atalho_do_gerenciador(monkeypatch):
+    sentinel = object()
+    captured = {}
+
+    monkeypatch.setattr(terminal_completer, "session_key_bindings", lambda: sentinel)
+    monkeypatch.setattr(
+        terminal_completer,
+        "PromptSession",
+        lambda **kwargs: captured.update(kwargs) or kwargs,
+    )
+
+    terminal_completer.build_prompt_session()
+
+    assert captured["key_bindings"] is sentinel
 
 
 def test_completa_subcomando_de_configuracao():
