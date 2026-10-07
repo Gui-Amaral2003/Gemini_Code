@@ -45,6 +45,50 @@ def test_list_sessions_le_formato_antigo_sem_updated_at(tmp_path):
     ]
 
 
+def test_list_sessions_ignora_messages_em_formato_invalido(tmp_path):
+    path = tmp_path / "sessions.json"
+    path.write_text(
+        json.dumps({"invalida": {"messages": None}}),
+        encoding="utf-8",
+    )
+
+    assert ChatSession.list_sessions(path)[0]["messages"] == 0
+
+
+class FakeClientError(Exception):
+    def __init__(self, code, message):
+        super().__init__(message)
+        self.code = code
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        "previous_interaction_id not found",
+        "Interaction expired",
+        "Previous interaction does not exist",
+    ],
+)
+def test_reconhece_interacao_expirada(message):
+    error = FakeClientError(404, message)
+
+    assert ChatSession._looks_like_expired_interaction(error)
+
+
+@pytest.mark.parametrize(
+    ("code", "message"),
+    [
+        (401, "Interaction not found"),
+        (400, "Invalid API key"),
+        (400, "Interaction request malformed"),
+    ],
+)
+def test_nao_confunde_outros_erros_com_interacao_expirada(code, message):
+    error = FakeClientError(code, message)
+
+    assert not ChatSession._looks_like_expired_interaction(error)
+
+
 @pytest.mark.parametrize("session_id", ["", "   ", "nome\nquebrado", "x" * 81])
 def test_rejeita_nome_de_sessao_invalido(session_id, tmp_path):
     with pytest.raises(ValueError):

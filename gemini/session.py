@@ -4,12 +4,17 @@ import time
 from pathlib import Path
 from typing import Optional
 
+from google.genai import errors as genai_errors
+
+from tools.confirmation import confirm_action
+
 from .client import GeminiClient
 from .config import DEFAULT_SESSIONS_PATH
 from .models import GeminiResponse, Message
 
 logger = logging.getLogger("gemini_client")
 
+# Reconstrução de contexto quando o interaction_id some do servidor.
 
 class ChatSession:
     """
@@ -24,6 +29,10 @@ class ChatSession:
     continuidade é o interaction_id, que vive no servidor do Gemini, não
     no processo Python. Sem session_id, a sessão só existe em memória e se
     perde quando o script termina (comportamento anterior).
+
+    Se o servidor já descartou a interação (sessão antiga), send() oferece
+    reconstruir o contexto a partir do histórico local — ver
+    _build_replay_prompt() para o que se perde nessa reconstrução.
     """
 
     def __init__(
@@ -104,16 +113,30 @@ class ChatSession:
 
     def send(self, user_message: str, **kwargs) -> GeminiResponse:
         """Envia uma mensagem e recebe a resposta, mantendo o histórico."""
-        response = self.client.generate(
-            prompt=user_message,
-            previous_interaction_id=self._last_interaction_id,
-            system=self.system,
-            **kwargs,
-        )
+        try:
+            response = self.client.generate(
+                prompt=user_message,
+                previous_interaction_id=self._last_interaction_id,
+                system=self.system,
+                **kwargs,
+            )
+        except genai_errors.ClientError as error:
+            if not self._confirm_replay(error):
+                raise
+            # Contexto do servidor perdido: manda o histórico local como texto,
+            # sem previous_interaction_id. A resposta traz um interaction_id
+            # novo, e as proximas mensagens voltam a continuar no servidor.
+            response = self.client.generate(
+                prompt=self._build_replay_prompt(user_message),
+                previous_interaction_id=None,
+                system=self.system,
+                **kwargs,
+            )
 
         # Só grava no histórico se a chamada teve sucesso — assim, se der
         # erro (mesmo após os retries), a conversa não fica com uma
         # mensagem "órfã" do usuário sem resposta correspondente.
+        # Grava a mensagem ORIGINAL do usuário, nunca o prompt de reconstrução.
         self.messages.append(Message(role="user", text=user_message))
         self.messages.append(Message(role="model", text=response.text))
         self._last_interaction_id = response.interaction_id
@@ -133,6 +156,60 @@ class ChatSession:
         self._last_interaction_id = None
         if self.session_id:
             self._save()
+
+    # ------------------------------------------------------------------- #
+    # Reconstrução de contexto (interaction_id expirado no servidor)
+    # ------------------------------------------------------------------- #
+
+    @staticmethod
+    def _looks_like_expired_interaction(error: Exception) -> bool:
+        if getattr(error, "code", None) not in _EXPIRED_ERROR_CODES:
+            return False
+        text = str(error).lower()
+        references_interaction = any(
+            marker in text for marker in _INTERACTION_REFERENCE_MARKERS
+        )
+        describes_missing_state = any(
+            marker in text for marker in _INTERACTION_STATE_MARKERS
+        )
+        return references_interaction and describes_missing_state
+
+    def _confirm_replay(self, error: Exception) -> bool:
+        """True se vale (e o usuário aceitou) reconstruir o contexto localmente."""
+        if not self._last_interaction_id or not self.messages:
+            return False  # nada para reconstruir
+        if not self._looks_like_expired_interaction(error):
+            return False  # outro erro de cliente (chave, parâmetro...) — propaga
+
+        logger.warning("Interação anterior indisponível no servidor: %s", error)
+        return confirm_action(
+            "Não consegui continuar a conversa no servidor (a interação anterior "
+            "pode ter expirado).\n\n"
+            f"Reconstruir o contexto a partir das últimas {REPLAY_MAX_MESSAGES} "
+            "mensagens do histórico local? Resultados de ferramentas (dados de "
+            "planilhas, banco etc.) não fazem parte do histórico e não serão "
+            "recuperados. As mensagens reenviadas consomem tokens de entrada."
+        )
+
+    def _build_replay_prompt(self, new_message: str) -> str:
+        recent = self.messages[-REPLAY_MAX_MESSAGES:]
+        lines = []
+        for message in recent:
+            speaker = "Usuário" if message.role == "user" else "Assistente"
+            text = message.text
+            if len(text) > REPLAY_MAX_CHARS_PER_MESSAGE:
+                text = text[:REPLAY_MAX_CHARS_PER_MESSAGE] + " [...truncado]"
+            lines.append(f"{speaker}: {text}")
+
+        transcript = "\n\n".join(lines)
+        return (
+            "Esta conversa está sendo retomada: o contexto original foi perdido no "
+            "servidor. Abaixo está a transcrição das mensagens mais recentes, só com "
+            "o texto trocado (resultados de ferramentas não estão incluídos). Use-a "
+            "como contexto e responda à nova mensagem do usuário.\n\n"
+            f"--- Transcrição anterior ---\n{transcript}\n--- Fim da transcrição ---\n\n"
+            f"Nova mensagem do usuário:\n{new_message}"
+        )
 
     # ------------------------------------------------------------------- #
     # Persistência em disco (entre execuções diferentes do script)
