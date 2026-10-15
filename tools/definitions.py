@@ -626,7 +626,7 @@ TOOL_DEFINITIONS = [
             "Retorna estatísticas descritivas de uma única coluna de uma planilha "
             "(.xlsx ou .csv): min, máximo, média, mediana e desvio padrão para "
             "colunas numéricas; min/máximo para datas; valores únicos e os "
-            f"5 valores mais frequentes para colunas de texto. "
+            "5 valores mais frequentes para colunas de texto. "
             "Use antes de analyze_sheet_data ou plot_sheet_data para entender a "
             "coluna e escolher operation/group_by corretamente."
         ),

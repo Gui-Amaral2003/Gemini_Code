@@ -1,5 +1,3 @@
-from pathlib import Path
-
 from gemini.config_checks import CheckStatus, run_local_checks
 
 

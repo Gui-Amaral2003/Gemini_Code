@@ -1,5 +1,7 @@
 # Gemini Terminal
 
+[![CI](https://github.com/Gui-Amaral2003/Gemini_Code/actions/workflows/ci.yml/badge.svg)](https://github.com/Gui-Amaral2003/Gemini_Code/actions/workflows/ci.yml)
+
 Agente de IA em Python para a [Google Gemini API](https://ai.google.dev/), com terminal interativo, conversas persistentes, ferramentas locais (function calling), cache e roteamento entre modelos.
 
 A biblioteca está organizada em um pacote Python dedicado em `gemini/`, enquanto as integrações executáveis ficam no catálogo central de `tools/registry.py`.
@@ -787,6 +789,8 @@ Este projeto está em desenvolvimento ativo. Contribuições são bem-vindas!
 Para validar uma mudança localmente:
 
 ```bash
+python -m pip install -r requirements-dev.txt
+python -m ruff check .
 python -m pytest -q
 ```
 

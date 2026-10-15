@@ -48,6 +48,3 @@ thrift>=0.16.0
 # Timeout das chamadas ao Gemini. Embora também seja dependência transitiva
 # do google-genai, o projeto importa e trata exceções do httpx diretamente.
 httpx>=0.27.0
-
-# Testes
-pytest>=7.4.0
