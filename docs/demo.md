@@ -4,6 +4,8 @@ A demonstração usa exclusivamente `examples/SampleSuperstore.csv`, um dataset 
 
 ## Execução completa com Gemini
 
+Com o projeto já instalado conforme o [Quick start](../README.md#quick-start):
+
 ```bash
 gemini-terminal --config
 gemini-terminal

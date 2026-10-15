@@ -45,7 +45,33 @@ Um agente que acessa arquivos, bancos e scripts precisa de mais do que uma chama
 - uma chave da [Google Gemini API](https://ai.google.dev/);
 - banco e Airflow apenas se essas integrações forem utilizadas.
 
-### Instalação
+### Instalação para uso
+
+Como o Gemini Terminal é uma aplicação de linha de comando, a forma recomendada de instalação é com o [`pipx`](https://pipx.pypa.io/). Ele cria um ambiente isolado e disponibiliza o comando `gemini-terminal` globalmente.
+
+Instale e configure o `pipx` uma única vez:
+
+```powershell
+py -m pip install --user pipx
+py -m pipx ensurepath
+```
+
+Feche e reabra o terminal. Em seguida, instale o Gemini Terminal diretamente do GitHub:
+
+```powershell
+pipx install git+https://github.com/Gui-Amaral2003/Gemini_Code.git
+```
+
+Configure a chave e inicie a aplicação:
+
+```powershell
+gemini-terminal --config
+gemini-terminal
+```
+
+O comando pode ser executado em qualquer diretório. Sessões, histórico, cache e logs ficam no diretório de dados da aplicação; arquivos produzidos pelas ferramentas continuam relativos ao diretório atual.
+
+### Instalação para desenvolvimento
 
 ```bash
 git clone https://github.com/Gui-Amaral2003/Gemini_Code.git
@@ -53,25 +79,29 @@ cd Gemini_Code
 python -m venv .venv
 ```
 
-Ative o ambiente virtual e instale o projeto em modo editável:
+Ative o ambiente virtual e instale o projeto, incluindo as dependências de desenvolvimento, em modo editável:
 
 ```bash
-python -m pip install -e .
+python -m pip install -e ".[dev]"
 ```
 
-Configure a chave sem editar arquivos manualmente:
+Nesse modo, as alterações no código passam a valer sem reinstalar o pacote.
 
-```bash
-gemini-terminal --config
+### Comando não encontrado no Windows
+
+Se `gemini-terminal` não for reconhecido depois da instalação, reabra o terminal após executar:
+
+```powershell
+py -m pipx ensurepath
 ```
 
-Inicie o terminal:
+Como alternativa, uma instalação feita com `pip` pode ser executada sem depender do `PATH`:
 
-```bash
-gemini-terminal
+```powershell
+python -m gemini_terminal
 ```
 
-O `.env`, históricos, caches e logs locais são ignorados pelo Git. O comando também pode ser executado fora da pasta do repositório.
+Para diagnosticar a instalação, use `Get-Command gemini-terminal` no PowerShell. O `.env`, históricos, caches e logs locais são ignorados pelo Git.
 
 ## Demonstração reproduzível
 

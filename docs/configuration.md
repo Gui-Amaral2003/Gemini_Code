@@ -1,5 +1,17 @@
 # Configuração
 
+## Instalação do comando
+
+Para uso normal, instale a aplicação isoladamente com `pipx`:
+
+```powershell
+py -m pip install --user pipx
+py -m pipx ensurepath
+py -m pipx install git+https://github.com/Gui-Amaral2003/Gemini_Code.git
+```
+
+Depois de `ensurepath`, feche e reabra o terminal para que o Windows reconheça a alteração no `PATH`. Se o projeto tiver sido instalado com `pip`, `python -m gemini_terminal` pode ser usado como alternativa ao executável global.
+
 ## Assistente
 
 ```bash
