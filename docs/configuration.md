@@ -3,7 +3,7 @@
 ## Assistente
 
 ```bash
-python gemini_terminal.py --config
+gemini-terminal --config
 ```
 
 Dentro do terminal:
@@ -33,6 +33,18 @@ AIRFLOW_PASSWORD=sua_senha
 ```
 
 O `.env` não deve ser versionado.
+
+## Diretório de dados
+
+Sessões, cache, quota, histórico do prompt, traces e logs de auditoria ficam no diretório de dados da aplicação definido pelo sistema operacional. Para escolher outro local:
+
+```env
+GEMINI_DATA_DIR=C:\caminho\para\gemini-data
+```
+
+Essa separação permite executar `gemini-terminal` de qualquer diretório sem gravar estado dentro do pacote instalado. A pasta `output/` continua relativa ao diretório atual, pois contém resultados solicitados pelo usuário.
+
+Para reutilizar sessões criadas por versões anteriores, aponte temporariamente `GEMINI_DATA_DIR` para a antiga pasta `gemini/` do clone ou copie os arquivos locais para o novo diretório.
 
 ## Bancos de dados
 

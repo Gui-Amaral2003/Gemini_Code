@@ -35,6 +35,13 @@ def _validate_port(value: str) -> Optional[str]:
 
 
 ENV_SETTINGS: dict[str, EnvSetting] = {
+    "GEMINI_DATA_DIR": EnvSetting(
+        key="GEMINI_DATA_DIR",
+        label="Diretório de dados",
+        group="Aplicativo",
+        description="Local opcional para sessões, cache, quota e logs.",
+        example="C:\\Users\\usuario\\GeminiTerminal",
+    ),
     "GEMINI_API_KEY": EnvSetting(
         key="GEMINI_API_KEY",
         label="Gemini API key",
@@ -61,7 +68,7 @@ ENV_SETTINGS: dict[str, EnvSetting] = {
     "AIRFLOW_PASSWORD": EnvSetting(key="AIRFLOW_PASSWORD", label="Senha", group="Airflow", secret=True),
 }
 
-GROUP_ORDER = ["Gemini", "SQL Server", "Hive", "Airflow"]
+GROUP_ORDER = ["Aplicativo", "Gemini", "SQL Server", "Hive", "Airflow"]
 
 
 def groups() -> dict[str, list[EnvSetting]]:

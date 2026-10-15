@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gemini-code-terminal"
+version = "0.1.0"
+description = "Local-first data agent powered by the Google Gemini API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Gui Amaral" }]
+keywords = ["gemini", "ai-agent", "terminal", "function-calling", "data-analysis"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "google-genai>=2.4.0",
+    "rich>=13.0.0",
+    "prompt-toolkit>=3.0.0",
+    "python-dotenv>=1.0.0",
+    "platformdirs>=4.0.0",
+    "sqlalchemy>=2.0.0",
+    "pyyaml>=6.0",
+    "pyodbc>=5.0.0",
+    "pandas>=2.0.0",
+    "tabulate>=0.9.0",
+    "openpyxl>=3.0.0",
+    "pypdf>=5.0.0",
+    "matplotlib>=3.7.0",
+    "plotext>=5.2.8",
+    "requests>=2.31.0",
+    "pyhive>=0.7.0",
+    "thrift>=0.16.0",
+    "thrift-sasl>=0.4.3",
+    "pure-sasl>=0.6.2",
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2.0,<2.0.0",
+    "pytest>=7.4.0",
+    "ruff>=0.16.0,<0.17.0",
+]
+
+[project.scripts]
+gemini-terminal = "gemini_terminal:main"
+
+[project.urls]
+Repository = "https://github.com/Gui-Amaral2003/Gemini_Code"
+Issues = "https://github.com/Gui-Amaral2003/Gemini_Code/issues"
+
+[tool.setuptools]
+py-modules = ["gemini_terminal", "terminal_completer", "terminal_timeline"]
+
+[tool.setuptools.packages.find]
+include = ["gemini*", "tools*"]
+exclude = ["tests*"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+# Primeira etapa de adoção: erros de sintaxe/importação e problemas
+# objetivos do Pyflakes. Regras adicionais serão ativadas gradualmente.
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

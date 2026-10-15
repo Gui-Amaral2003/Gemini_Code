@@ -1,9 +1,27 @@
 
-from pathlib import Path
-from google.genai import errors as genai_errors
+import os
 import ssl
+from pathlib import Path
+
+from google.genai import errors as genai_errors
+from dotenv import load_dotenv
+from platformdirs import user_data_dir
+
+load_dotenv()
 
 PACKAGE_DIR = Path(__file__).resolve().parent
+APP_NAME = "GeminiTerminal"
+APP_AUTHOR = "GuiAmaral"
+
+
+def _resolve_data_dir() -> Path:
+    configured = os.environ.get("GEMINI_DATA_DIR")
+    if configured:
+        return Path(configured).expanduser().resolve()
+    return Path(user_data_dir(APP_NAME, APP_AUTHOR))
+
+
+DATA_DIR = _resolve_data_dir()
 
 RETRYABLE_ERRORS = (
     genai_errors.ServerError,
@@ -13,14 +31,17 @@ RETRYABLE_ERRORS = (
 )
 
 DEFAULT_MODEL = "gemini-3.8-flash"
-DEFAULT_USAGE_LOG_PATH = Path('gemini/gemini_usage_log.jsonl')
-DEFAULT_CACHE_PATH = Path('gemini/gemini_cache.json')
+DEFAULT_USAGE_LOG_PATH = DATA_DIR / "gemini_usage_log.jsonl"
+DEFAULT_CACHE_PATH = DATA_DIR / "gemini_cache.json"
 # A persistência de sessões não pode depender do diretório de onde o
 # terminal foi iniciado. Sem uma base absoluta, executar o mesmo script fora
 # da raiz do projeto cria/lê outro arquivo e faz sessões parecerem ausentes.
-DEFAULT_SESSIONS_PATH = PACKAGE_DIR / "chat_sessions.json"
-DEFAULT_TRACE_LOG_PATH = Path('gemini/gemini_trace_log.jsonl')
-DEFAULT_QUOTA_PATH = Path('gemini/quota_tracker.json')
+DEFAULT_SESSIONS_PATH = DATA_DIR / "chat_sessions.json"
+DEFAULT_TRACE_LOG_PATH = DATA_DIR / "gemini_trace_log.jsonl"
+DEFAULT_QUOTA_PATH = DATA_DIR / "quota_tracker.json"
+DEFAULT_PROMPT_HISTORY_PATH = DATA_DIR / "prompt_history.txt"
+DEFAULT_DB_AUDIT_LOG_PATH = DATA_DIR / "db_write_audit_log.jsonl"
+DEFAULT_GIT_AUDIT_LOG_PATH = DATA_DIR / "git_write_audit_log.jsonl"
 
 # --------------------------------------------------------------------------- #
 # Timeouts — defesa em camadas contra travamentos.

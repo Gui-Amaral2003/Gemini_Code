@@ -65,8 +65,8 @@ Ferramentas exploratórias mantêm o modelo principal para decidir o próximo pa
 
 | Estado | Persistência |
 |---|---|
-| Sessões | JSON local ignorado pelo Git |
-| Cache | JSON local ignorado pelo Git |
-| Uso e trace | JSONL local ignorado pelo Git |
+| Sessões | Diretório de dados do usuário |
+| Cache | Diretório de dados do usuário |
+| Uso, trace e auditoria | Diretório de dados do usuário |
 | Contexto remoto | `previous_interaction_id` mantido pelo Gemini |
 | Arquivos criados | Contexto em memória do `ToolExecutor` |

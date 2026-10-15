@@ -33,9 +33,10 @@ Fica como ferramenta separada, se/quando for necessária.
 import json
 import logging
 import time
-from pathlib import Path
 from typing import Optional
 import sqlalchemy
+from gemini.config import DEFAULT_DB_AUDIT_LOG_PATH
+
 from .confirmation import confirm_action_typed
 from .database import TABELAS_PERMITIDAS, get_engine
 from .validation import (
@@ -49,7 +50,7 @@ logger = logging.getLogger("gemini_client")
 
 MAX_AFFECTED_ROWS = 500
 CONFIRM_PHRASE = "EXECUTAR"
-WRITE_AUDIT_LOG_PATH = Path("gemini/db_write_audit_log.jsonl")
+WRITE_AUDIT_LOG_PATH = DEFAULT_DB_AUDIT_LOG_PATH
 
 def get_write_engine(connection_name: str):
     """

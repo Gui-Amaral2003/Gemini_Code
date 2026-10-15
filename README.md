@@ -53,25 +53,25 @@ cd Gemini_Code
 python -m venv .venv
 ```
 
-Ative o ambiente virtual e instale as dependências:
+Ative o ambiente virtual e instale o projeto em modo editável:
 
 ```bash
-python -m pip install -r requirements.txt
+python -m pip install -e .
 ```
 
 Configure a chave sem editar arquivos manualmente:
 
 ```bash
-python gemini_terminal.py --config
+gemini-terminal --config
 ```
 
 Inicie o terminal:
 
 ```bash
-python gemini_terminal.py
+gemini-terminal
 ```
 
-O `.env`, históricos, caches e logs locais são ignorados pelo Git.
+O `.env`, históricos, caches e logs locais são ignorados pelo Git. O comando também pode ser executado fora da pasta do repositório.
 
 ## Demonstração reproduzível
 
@@ -143,7 +143,7 @@ Consulte o [modelo de segurança e as limitações conhecidas](docs/security.md)
 ## Desenvolvimento
 
 ```bash
-python -m pip install -r requirements-dev.txt
+python -m pip install -e ".[dev]"
 python -m ruff check .
 python -m pytest -q
 ```
@@ -160,7 +160,7 @@ A workflow testa automaticamente Python 3.11 e 3.12 em cada push e pull request.
 
 ## Roadmap
 
-1. empacotamento com `pyproject.toml` e entry point `gemini-terminal`;
+1. dependências opcionais e carregamento lazy das integrações;
 2. avaliações comportamentais do agente;
 3. separação explícita entre cliente de API e `DataAgent`;
 4. release `v0.1.0`.

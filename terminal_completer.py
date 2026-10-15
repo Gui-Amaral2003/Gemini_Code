@@ -17,11 +17,11 @@ from tools.airflow_tool import AIRFLOW_ALLOWED_DAGS
 from tools.git_tool import GIT_ALLOWED_REPOS
 from tools.filesystem import ALLOWED_SEARCH_DIRS
 
-from gemini.config import DEFAULT_SESSIONS_PATH
+from gemini.config import DEFAULT_PROMPT_HISTORY_PATH, DEFAULT_SESSIONS_PATH
 from gemini.session import ChatSession
 from gemini.session_ui import session_key_bindings
 
-HISTORY_PATH = "gemini/prompt_history.txt"
+HISTORY_PATH = DEFAULT_PROMPT_HISTORY_PATH
 MIN_CHARS_FILE_COMPLETION = 3
 
 # Uniao dos formatos que as ferramentas atuais conseguem consumir de forma

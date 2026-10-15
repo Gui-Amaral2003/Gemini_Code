@@ -38,6 +38,9 @@ import subprocess
 import time
 from pathlib import Path
 from typing import Optional
+
+from gemini.config import DEFAULT_GIT_AUDIT_LOG_PATH
+
 from .confirmation import confirm_action_typed
 
 logger = logging.getLogger('gemini_client')
@@ -56,7 +59,7 @@ GIT_ALLOWED_REPOS: dict[str, dict] = {
 GIT_TIMEOUT_SECONDS = 20
 MAX_OUTPUT_CHARS = 10000
 EDIT_CONFIRM_PHRASE = 'EDITAR'
-EDIT_AUDIT_LOG_PATH = Path("gemini/git_write_audit_log.jsonl")
+EDIT_AUDIT_LOG_PATH = DEFAULT_GIT_AUDIT_LOG_PATH
 
 # HEAD, HEAD~2, HEAD^, hash curto/longo, nomes de branch simples — mas nunca
 # algo que comece com "-" (evita que um "commit_ref" seja lido como flag).

@@ -5,8 +5,8 @@ A demonstração usa exclusivamente `examples/SampleSuperstore.csv`, um dataset 
 ## Execução completa com Gemini
 
 ```bash
-python gemini_terminal.py --config
-python gemini_terminal.py
+gemini-terminal --config
+gemini-terminal
 ```
 
 Opcionalmente, habilite a timeline persistente com `/trace on` e envie:
