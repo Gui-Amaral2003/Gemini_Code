@@ -41,9 +41,14 @@ plotext>=5.2.8
 # Cliente HTTP (integração com a API do Airflow)
 requests>=2.31.0
 
-# Driver Hive (necessário para as tools de Hive via SQLAlchemy/LDAP)
-pyhive[hive]>=0.7.0
+# Driver Hive (necessário para as tools de Hive via SQLAlchemy/LDAP).
+# As dependências SASL são declaradas explicitamente para usar o fallback
+# puro em Python do PyHive. O extra ``pyhive[hive]`` também instala o pacote
+# nativo ``sasl``, que exige compilador e bibliotecas Cyrus SASL do sistema.
+pyhive>=0.7.0
 thrift>=0.16.0
+thrift-sasl>=0.4.3
+pure-sasl>=0.6.2
 
 # Timeout das chamadas ao Gemini. Embora também seja dependência transitiva
 # do google-genai, o projeto importa e trata exceções do httpx diretamente.
