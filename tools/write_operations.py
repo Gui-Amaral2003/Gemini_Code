@@ -34,7 +34,6 @@ import json
 import logging
 import time
 from typing import Optional
-import sqlalchemy
 from gemini.config import DEFAULT_DB_AUDIT_LOG_PATH
 
 from .confirmation import confirm_action_typed
@@ -122,11 +121,11 @@ def _build_where(config: dict, conditions: dict) -> tuple[Optional[str], Optiona
 
     return " AND ".join(clauses), params, None
 
-def _preview_count(engine, schema: str, table: str, where_sql: str, where_params: dict) -> tuple[Optional[int], Optional[str]]:
+def _preview_count(engine, schema: str, table: str, where_sql: str, where_params: dict, sql_text) -> tuple[Optional[int], Optional[str]]:
     sql = f"SELECT COUNT(*) AS total FROM [{schema}].[{table}] WHERE {where_sql}"
     try:
         with engine.connect() as conn:
-            total = conn.execute(sqlalchemy.text(sql), where_params).scalar_one()
+            total = conn.execute(sql_text(sql), where_params).scalar_one()
     except Exception as e:
         return None, f"Erro ao calcular o preview de linhas afetadas: {e}"
     return int(total), None
@@ -172,8 +171,11 @@ def _execute_write(table, operation: str, conditions: list[dict], set_values: Op
         set_clause_sql = ", ".join(set_pieces)
 
     engine = get_write_engine(connection_name)
+    from sqlalchemy import text as sql_text
 
-    preview_total, error = _preview_count(engine, schema, table, where_sql, where_params)
+    preview_total, error = _preview_count(
+        engine, schema, table, where_sql, where_params, sql_text
+    )
     if error:
         return {"success": False, "error": error}
 
@@ -205,7 +207,7 @@ def _execute_write(table, operation: str, conditions: list[dict], set_values: Op
 
     try:
         with engine.begin() as conn:
-            result = conn.execute(sqlalchemy.text(sql), all_params)
+            result = conn.execute(sql_text(sql), all_params)
             rowcount = result.rowcount
             if rowcount != preview_total:
                 raise RuntimeError(f"Contagem de linhas afetadas diverge do preview: {rowcount} vs {preview_total}.")

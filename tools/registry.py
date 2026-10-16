@@ -17,44 +17,33 @@ e TOOL_POLICIES.
 """
 from dataclasses import dataclass
 from enum import Enum
+from importlib import import_module
 from typing import Callable, Optional
 
-from .filesystem import read_file, create_file
-from .script_runner import run_script
-from .spreadsheet import (
-    list_sheets,
-    preview_sheet,
-    read_sheet,
-    search_in_sheet,
-)
-from .database import query_table
-from .data_analysis import (
-    analyze_sheet_data,
-    analyze_table_data,
-    plot_sheet_data,
-    plot_table_data,
-    describe_sheet_column,
-    describe_table_column
-)
-from .pdf_reader import preview_pdf, read_pdf, search_in_pdf
-from .git_tool import (
-    git_status,
-    git_diff_unstaged,
-    git_diff_staged,
-    git_log,
-    git_show,
-    git_blame,
-    edit_repo_file
-)
-from .write_operations import update_table, delete_table_rows
-from .airflow_tool import (
-    list_dags,
-    get_dag_runs,
-    get_task_instances,
-    get_task_log,
-)
-
 from .definitions import TOOL_DEFINITIONS
+
+
+@dataclass(frozen=True)
+class LazyTool:
+    """Callable que importa a implementação somente na primeira execução."""
+
+    target: str
+
+    def load(self) -> Callable:
+        module_name, separator, function_name = self.target.partition(":")
+        if not separator or not module_name or not function_name:
+            raise ValueError(f"Referência de tool inválida: {self.target!r}")
+        function = getattr(import_module(module_name), function_name)
+        if not callable(function):
+            raise TypeError(f"Implementação de tool não é chamável: {self.target}")
+        return function
+
+    def __call__(self, *args, **kwargs):
+        return self.load()(*args, **kwargs)
+
+
+def lazy(target: str) -> LazyTool:
+    return LazyTool(target)
 
 class ToolRouting(Enum):
     """Ver gemini/model_routing.py para o racional completo do roteamento multi-modelo"""
@@ -80,36 +69,36 @@ class ToolPolicy:
     registers_session_created_file: Optional[str] = None
 
 TOOL_POLICIES: dict[str, ToolPolicy] = {
-    "read_file": ToolPolicy("read_file", read_file, routing=ToolRouting.EXPLORATORY),
-    "create_file": ToolPolicy("create_file", create_file, requires_confirmation=True, routing=ToolRouting.EXPLORATORY, registers_session_created_file="file_path"),
-    "run_script": ToolPolicy("run_script", run_script, requires_confirmation=True, routing=ToolRouting.EXPLORATORY, requires_session_created_file="path"),
-    "query_table": ToolPolicy("query_table", query_table, routing=ToolRouting.EXPLORATORY),
-    "update_table": ToolPolicy("update_table", update_table, requires_confirmation=True, routing=ToolRouting.TERMINAL),
-    "delete_table_rows": ToolPolicy("delete_table_rows", delete_table_rows, requires_confirmation=True, routing=ToolRouting.TERMINAL),
-    "list_sheets": ToolPolicy("list_sheets", list_sheets, routing=ToolRouting.EXPLORATORY),
-    "preview_sheet": ToolPolicy("preview_sheet", preview_sheet, routing=ToolRouting.EXPLORATORY),
-    "read_sheet": ToolPolicy("read_sheet", read_sheet, routing=ToolRouting.EXPLORATORY),
-    "search_in_sheet": ToolPolicy("search_in_sheet", search_in_sheet, routing=ToolRouting.TERMINAL),
-    "analyze_sheet_data": ToolPolicy("analyze_sheet_data", analyze_sheet_data, routing=ToolRouting.TERMINAL),
-    "analyze_table_data": ToolPolicy("analyze_table_data", analyze_table_data, routing=ToolRouting.TERMINAL),
-    "plot_sheet_data": ToolPolicy("plot_sheet_data", plot_sheet_data, generate_file=True, routing=ToolRouting.TERMINAL),
-    "plot_table_data": ToolPolicy("plot_table_data", plot_table_data, generate_file=True, routing=ToolRouting.TERMINAL),
-    "describe_sheet_column": ToolPolicy("describe_sheet_column", describe_sheet_column, routing=ToolRouting.EXPLORATORY),
-    "describe_table_column": ToolPolicy("describe_table_column", describe_table_column, routing=ToolRouting.EXPLORATORY),
-    "preview_pdf": ToolPolicy("preview_pdf", preview_pdf, routing=ToolRouting.EXPLORATORY),
-    "read_pdf": ToolPolicy("read_pdf", read_pdf, routing=ToolRouting.EXPLORATORY),
-    "search_in_pdf": ToolPolicy("search_in_pdf", search_in_pdf, routing=ToolRouting.TERMINAL),
-    "git_status": ToolPolicy("git_status", git_status, routing=ToolRouting.EXPLORATORY),
-    "git_diff_unstaged": ToolPolicy("git_diff_unstaged", git_diff_unstaged, routing=ToolRouting.TERMINAL),
-    "git_diff_staged": ToolPolicy("git_diff_staged", git_diff_staged, routing=ToolRouting.TERMINAL),
-    "git_log": ToolPolicy("git_log", git_log, routing=ToolRouting.EXPLORATORY),
-    "git_show": ToolPolicy("git_show", git_show, routing=ToolRouting.TERMINAL),
-    "git_blame": ToolPolicy("git_blame", git_blame, routing=ToolRouting.TERMINAL),
-    "edit_repo_file": ToolPolicy("edit_repo_file", edit_repo_file, requires_confirmation=True, routing=ToolRouting.TERMINAL),
-    "list_dags": ToolPolicy("list_dags", list_dags, routing=ToolRouting.EXPLORATORY),
-    "get_dag_runs": ToolPolicy("get_dag_runs", get_dag_runs, routing=ToolRouting.EXPLORATORY),
-    "get_task_instances": ToolPolicy("get_task_instances", get_task_instances, routing=ToolRouting.TERMINAL),
-    "get_task_log": ToolPolicy("get_task_log", get_task_log, routing=ToolRouting.TERMINAL),
+    "read_file": ToolPolicy("read_file", lazy("tools.filesystem:read_file"), routing=ToolRouting.EXPLORATORY),
+    "create_file": ToolPolicy("create_file", lazy("tools.filesystem:create_file"), requires_confirmation=True, routing=ToolRouting.EXPLORATORY, registers_session_created_file="file_path"),
+    "run_script": ToolPolicy("run_script", lazy("tools.script_runner:run_script"), requires_confirmation=True, routing=ToolRouting.EXPLORATORY, requires_session_created_file="path"),
+    "query_table": ToolPolicy("query_table", lazy("tools.database:query_table"), routing=ToolRouting.EXPLORATORY),
+    "update_table": ToolPolicy("update_table", lazy("tools.write_operations:update_table"), requires_confirmation=True, routing=ToolRouting.TERMINAL),
+    "delete_table_rows": ToolPolicy("delete_table_rows", lazy("tools.write_operations:delete_table_rows"), requires_confirmation=True, routing=ToolRouting.TERMINAL),
+    "list_sheets": ToolPolicy("list_sheets", lazy("tools.spreadsheet:list_sheets"), routing=ToolRouting.EXPLORATORY),
+    "preview_sheet": ToolPolicy("preview_sheet", lazy("tools.spreadsheet:preview_sheet"), routing=ToolRouting.EXPLORATORY),
+    "read_sheet": ToolPolicy("read_sheet", lazy("tools.spreadsheet:read_sheet"), routing=ToolRouting.EXPLORATORY),
+    "search_in_sheet": ToolPolicy("search_in_sheet", lazy("tools.spreadsheet:search_in_sheet"), routing=ToolRouting.TERMINAL),
+    "analyze_sheet_data": ToolPolicy("analyze_sheet_data", lazy("tools.data_analysis:analyze_sheet_data"), routing=ToolRouting.TERMINAL),
+    "analyze_table_data": ToolPolicy("analyze_table_data", lazy("tools.data_analysis:analyze_table_data"), routing=ToolRouting.TERMINAL),
+    "plot_sheet_data": ToolPolicy("plot_sheet_data", lazy("tools.data_analysis:plot_sheet_data"), generate_file=True, routing=ToolRouting.TERMINAL),
+    "plot_table_data": ToolPolicy("plot_table_data", lazy("tools.data_analysis:plot_table_data"), generate_file=True, routing=ToolRouting.TERMINAL),
+    "describe_sheet_column": ToolPolicy("describe_sheet_column", lazy("tools.data_analysis:describe_sheet_column"), routing=ToolRouting.EXPLORATORY),
+    "describe_table_column": ToolPolicy("describe_table_column", lazy("tools.data_analysis:describe_table_column"), routing=ToolRouting.EXPLORATORY),
+    "preview_pdf": ToolPolicy("preview_pdf", lazy("tools.pdf_reader:preview_pdf"), routing=ToolRouting.EXPLORATORY),
+    "read_pdf": ToolPolicy("read_pdf", lazy("tools.pdf_reader:read_pdf"), routing=ToolRouting.EXPLORATORY),
+    "search_in_pdf": ToolPolicy("search_in_pdf", lazy("tools.pdf_reader:search_in_pdf"), routing=ToolRouting.TERMINAL),
+    "git_status": ToolPolicy("git_status", lazy("tools.git_tool:git_status"), routing=ToolRouting.EXPLORATORY),
+    "git_diff_unstaged": ToolPolicy("git_diff_unstaged", lazy("tools.git_tool:git_diff_unstaged"), routing=ToolRouting.TERMINAL),
+    "git_diff_staged": ToolPolicy("git_diff_staged", lazy("tools.git_tool:git_diff_staged"), routing=ToolRouting.TERMINAL),
+    "git_log": ToolPolicy("git_log", lazy("tools.git_tool:git_log"), routing=ToolRouting.EXPLORATORY),
+    "git_show": ToolPolicy("git_show", lazy("tools.git_tool:git_show"), routing=ToolRouting.TERMINAL),
+    "git_blame": ToolPolicy("git_blame", lazy("tools.git_tool:git_blame"), routing=ToolRouting.TERMINAL),
+    "edit_repo_file": ToolPolicy("edit_repo_file", lazy("tools.git_tool:edit_repo_file"), requires_confirmation=True, routing=ToolRouting.TERMINAL),
+    "list_dags": ToolPolicy("list_dags", lazy("tools.airflow_tool:list_dags"), routing=ToolRouting.EXPLORATORY),
+    "get_dag_runs": ToolPolicy("get_dag_runs", lazy("tools.airflow_tool:get_dag_runs"), routing=ToolRouting.EXPLORATORY),
+    "get_task_instances": ToolPolicy("get_task_instances", lazy("tools.airflow_tool:get_task_instances"), routing=ToolRouting.TERMINAL),
+    "get_task_log": ToolPolicy("get_task_log", lazy("tools.airflow_tool:get_task_log"), routing=ToolRouting.TERMINAL),
 }
 
 TOOLS = {name: policy.function for name, policy in TOOL_POLICIES.items()}

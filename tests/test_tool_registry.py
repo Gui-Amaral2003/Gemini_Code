@@ -5,6 +5,28 @@ import pytest
 import tools.registry as registry
 
 
+def test_lazy_tool_imports_and_calls_target(monkeypatch):
+    imported = []
+
+    class Module:
+        @staticmethod
+        def execute(value):
+            return value * 2
+
+    monkeypatch.setattr(registry, "import_module", lambda name: imported.append(name) or Module)
+
+    tool = registry.LazyTool("fake.module:execute")
+
+    assert tool(3) == 6
+    assert imported == ["fake.module"]
+
+
+def test_optional_tool_policies_use_lazy_imports():
+    assert isinstance(registry.TOOL_POLICIES["read_sheet"].function, registry.LazyTool)
+    assert isinstance(registry.TOOL_POLICIES["read_pdf"].function, registry.LazyTool)
+    assert isinstance(registry.TOOL_POLICIES["list_dags"].function, registry.LazyTool)
+
+
 def test_registry_keys_match_policy_names(monkeypatch):
     policy = registry.TOOL_POLICIES["read_file"]
     monkeypatch.setitem(

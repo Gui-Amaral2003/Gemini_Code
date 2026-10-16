@@ -1,4 +1,10 @@
+# ruff: noqa: E402 -- o guard de dependência precisa rodar antes de pandas/openpyxl.
+
 from pathlib import Path
+from .optional_deps import require
+
+require("data")
+
 import pandas as pd
 from openpyxl import load_workbook
 from typing import Optional

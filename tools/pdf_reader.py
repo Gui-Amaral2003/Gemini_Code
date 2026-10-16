@@ -1,9 +1,13 @@
 ##TODO: Suporte a extração de tabelas
 ##TODO: Suporte a PDFs escaneados via OCR
+from __future__ import annotations
+from typing import TYPE_CHECKING
+from .optional_deps import require
+if TYPE_CHECKING:
+    from pypdf import PdfReader
+
 from pathlib import Path
 from typing import Optional
-from pypdf import PdfReader
-from pypdf.errors import PdfReadError
 from .filesystem import resolve_file_path
 
 PDF_EXTENSIONS = {'.pdf'}
@@ -13,8 +17,13 @@ CONTEXT_CHARS = 150 # tamanho do trecho de contexto para cada lado do match em s
 def _validate_pdf_path(path: str) -> tuple[Optional[Path], Optional[str]]:
     return resolve_file_path(path, allowed_extensions=PDF_EXTENSIONS)
 
+
 def _load_reader(file_path: Path) -> tuple[Optional[PdfReader], Optional[str]]:
     """Abre o pdf e trata os casos de arquivo protegido/corrompido. Retorna (reader, error_message)"""
+    require('pdf')
+    from pypdf import PdfReader
+    from pypdf.errors import PdfReadError
+
     try:
         reader = PdfReader(file_path)
 
@@ -198,10 +207,10 @@ def search_in_pdf(path: str, query: str, max_matches: int = 20) -> str:
  
     linhas = [f"Página {pagina}: {trecho}" for pagina, trecho in matches]
     resultado = "\n\n".join(linhas)
- 
+
     footer = f"\n\n{len(matches)} ocorrência(s) encontrada(s)."
     if len(matches) >= max_matches:
         footer += f" Limitado a {max_matches} — refine a busca se necessário."
- 
+
     return resultado + footer
- 
+

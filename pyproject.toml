@@ -25,28 +25,72 @@ dependencies = [
     "prompt-toolkit>=3.0.0",
     "python-dotenv>=1.0.0",
     "platformdirs>=4.0.0",
-    "sqlalchemy>=2.0.0",
     "pyyaml>=6.0",
-    "pyodbc>=5.0.0",
-    "pandas>=2.0.0",
-    "tabulate>=0.9.0",
-    "openpyxl>=3.0.0",
-    "pypdf>=5.0.0",
-    "matplotlib>=3.7.0",
-    "plotext>=5.2.8",
-    "requests>=2.31.0",
-    "pyhive>=0.7.0",
-    "thrift>=0.16.0",
-    "thrift-sasl>=0.4.3",
-    "pure-sasl>=0.6.2",
     "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
+data = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.0.0",
+]
+charts = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.0.0",
+    "matplotlib>=3.7.0",
+    "plotext>=5.2.8",
+]
+pdf = [
+    "pypdf>=5.0.0",
+]
+sqlserver = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.0.0",
+    "sqlalchemy>=2.0.0",
+    "pyodbc>=5.0.0",
+]
+hive = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.0.0",
+    "sqlalchemy>=2.0.0",
+    "pyhive>=0.7.0",
+    "thrift>=0.16.0",
+    "thrift-sasl>=0.4.3",
+    "pure-sasl>=0.6.2",
+]
+airflow = [
+    "requests>=2.31.0",
+]
+all = [
+    "pandas>=2.0.0",
+    "openpyxl>=3.0.0",
+    "matplotlib>=3.7.0",
+    "plotext>=5.2.8",
+    "pypdf>=5.0.0",
+    "sqlalchemy>=2.0.0",
+    "pyodbc>=5.0.0",
+    "pyhive>=0.7.0",
+    "thrift>=0.16.0",
+    "thrift-sasl>=0.4.3",
+    "pure-sasl>=0.6.2",
+    "requests>=2.31.0",
+]
 dev = [
     "build>=1.2.0,<2.0.0",
     "pytest>=7.4.0",
     "ruff>=0.16.0,<0.17.0",
+    "pandas>=2.0.0",
+    "openpyxl>=3.0.0",
+    "matplotlib>=3.7.0",
+    "plotext>=5.2.8",
+    "pypdf>=5.0.0",
+    "sqlalchemy>=2.0.0",
+    "pyodbc>=5.0.0",
+    "pyhive>=0.7.0",
+    "thrift>=0.16.0",
+    "thrift-sasl>=0.4.3",
+    "pure-sasl>=0.6.2",
+    "requests>=2.31.0",
 ]
 
 [project.scripts]

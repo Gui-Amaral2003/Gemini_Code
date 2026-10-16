@@ -41,6 +41,7 @@ from typing import Optional
 
 from gemini.config import DEFAULT_GIT_AUDIT_LOG_PATH
 
+from .catalogs import GIT_ALLOWED_REPOS
 from .confirmation import confirm_action_typed
 
 logger = logging.getLogger('gemini_client')
@@ -49,13 +50,6 @@ logger = logging.getLogger('gemini_client')
 # --------------------------------------------------------------------------- #
 # Por padrão, cadastra apenas o próprio projeto (raiz = um nível acima de tools/).
 # Adicione outras entradas aqui para permitir outros repositórios.
-GIT_ALLOWED_REPOS: dict[str, dict] = {
-    "gemini_code": {
-        'path': Path(__file__).resolve().parent.parent,
-        'writable': False
-    },
-}
-
 GIT_TIMEOUT_SECONDS = 20
 MAX_OUTPUT_CHARS = 10000
 EDIT_CONFIRM_PHRASE = 'EDITAR'

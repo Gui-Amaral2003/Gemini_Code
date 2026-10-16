@@ -14,6 +14,8 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import urlparse
 
+from tools.optional_deps import EXTRAS, install_command, missing_dependencies
+
 from .env_config import load_env_status
 
 
@@ -197,6 +199,36 @@ def _check_tools() -> list[ConfigCheck]:
         )]
 
 
+def _check_optional_extras(finder: DependencyFinder) -> list[ConfigCheck]:
+    labels = {
+        "data": "Planilhas e análise",
+        "charts": "Gráficos",
+        "pdf": "PDF",
+        "sqlserver": "SQL Server",
+        "hive": "Hive",
+        "airflow": "Airflow",
+    }
+    checks = []
+    for extra in EXTRAS:
+        missing = missing_dependencies(extra, finder)
+        if missing:
+            checks.append(ConfigCheck(
+                "Recursos opcionais",
+                labels[extra],
+                CheckStatus.SKIPPED,
+                "Não instalado: " + ", ".join(missing) + ".",
+                install_command(extra),
+            ))
+        else:
+            checks.append(ConfigCheck(
+                "Recursos opcionais",
+                labels[extra],
+                CheckStatus.OK,
+                f"Extra '{extra}' disponível.",
+            ))
+    return checks
+
+
 def _check_output_directory(output_dir: Path = Path("output")) -> ConfigCheck:
     target = output_dir if output_dir.exists() else output_dir.parent
     if target.exists() and os.access(target, os.W_OK):
@@ -220,6 +252,7 @@ def run_local_checks(
         *_check_sql_server(current, dependency_finder),
         *_check_hive(current, dependency_finder),
         *_check_airflow(current, dependency_finder),
+        *_check_optional_extras(dependency_finder),
         *_check_tools(),
         _check_output_directory(output_dir),
     ]

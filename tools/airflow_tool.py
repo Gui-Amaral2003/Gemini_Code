@@ -1,3 +1,5 @@
+# ruff: noqa: E402 -- o guard de dependência precisa rodar antes de requests.
+
 """
 Ferramentas de leitura (somente monitoramento) da API v2 do Airflow.
 
@@ -33,6 +35,11 @@ escrita, confirmação reforçada (digitar uma frase) e audit log dedicado
 import os
 import logging
 from typing import Optional
+from .optional_deps import require
+from .catalogs import AIRFLOW_ALLOWED_DAGS
+
+require("airflow")
+
 import requests
 
 logger = logging.getLogger('gemini_client')
@@ -43,9 +50,6 @@ logger = logging.getLogger('gemini_client')
 # Cadastre aqui os DAGs que o modelo pode consultar. Vazio por padrão —
 # list_dags/get_dag_runs/etc. retornam mensagem explicativa até que algo
 # seja cadastrado.
-
-AIRFLOW_ALLOWED_DAGS: dict[str, dict] = {"meu_dag_id": {"description": "Pipeline de ingestão diária."}, }
-
 AIRFLOW_TIMEOUT_SECONDS = 15
 MAX_OUTPUT_CHARS = 10000
 MAX_DAG_RUNS = 25

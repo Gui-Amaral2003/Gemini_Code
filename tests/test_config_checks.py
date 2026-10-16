@@ -80,3 +80,18 @@ def test_output_parent_can_be_used_when_directory_does_not_exist(tmp_path):
     output = find_check(checks, "Sistema local", "Output")
     assert output.status is CheckStatus.OK
     assert "pode ser criado" in output.message
+
+
+def test_optional_extra_is_reported_without_becoming_global_error(tmp_path):
+    checks = run_local_checks(
+        {"GEMINI_API_KEY": "real-key"},
+        fake_finder({"google.genai", "pypdf"}),
+        tmp_path,
+    )
+
+    pdf = find_check(checks, "Recursos opcionais", "PDF")
+    charts = find_check(checks, "Recursos opcionais", "Gráficos")
+
+    assert pdf.status is CheckStatus.OK
+    assert charts.status is CheckStatus.SKIPPED
+    assert "pipx install --force" in charts.remediation

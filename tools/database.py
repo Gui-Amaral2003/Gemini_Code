@@ -1,5 +1,11 @@
+# ruff: noqa: E402 -- o guard de dependência precisa rodar antes do pandas.
+
 import os
 from typing import Optional
+from .optional_deps import require
+
+require("data")
+
 import pandas as pd
 from .validation import (
     QueryValidationError,
@@ -7,37 +13,7 @@ from .validation import (
     validate_conditions
 )
 from .db_connections import DB_CONNECTIONS, get_dialect_config
-
-TABELAS_PERMITIDAS = {
-    "TEST_DOA_DEALS": {
-        'connection': 'sqlserver_main',
-        "schema": "rsk",
-        # coluna -> tipo esperado (usado pra validar operador e valor)
-        "colunas_filtro": {
-            "ID": "int",
-            "WBC_TERM": "str",
-            "CTG_SUBMITTER": 'str',
-            "Counterpart_CNPJ": 'str',
-            'Contract_Type': 'str',
-            'Supply_Start': 'date',
-            'Supply_End': 'date',
-            'Company': 'str',
-            'Deal_Date': 'date'
-        },
-        "colunas_retorno": ["ID", "WBC_TERM", "CTG_SUBMITTER", "Counterpart_CNPJ", "Contract_Type", "Supply_Start", "Supply_End", "Company", 'Deal_Date'],
-        "colunas_editaveis": {'WBC_TERM': 'str', 'Flag': 'str', 'Status': 'str'}
-    },
-    # Exemplo de tabela Hive — ajuste para as tabelas reais do seu ambiente.
-    # Sem "colunas_editaveis": Hive fica somente leitura por decisão de
-    # design (a maioria das tabelas Hive não é ACID transacional; ver
-    # write_operations.py, que segue assumindo dialeto mssql).
-    # "ALGUMA_TABELA_HIVE": {
-    #     "connection": "hive_lake",
-    #     "schema": "algum_schema",
-    #     "colunas_filtro": {"id": "int", "nome": "str"},
-    #     "colunas_retorno": ["id", "nome"],
-    # },
-}
+from .catalogs import TABLES_ALLOWED as TABELAS_PERMITIDAS
 
 MAX_ROWS = 10000
 #QUERY_TIMEOUT_SECONDS = 10
@@ -105,6 +81,7 @@ def get_engine(connection_name: str = "sqlserver_main"):
         )
  
     if connection_name not in _ENGINE_CACHE:
+        require(DB_CONNECTIONS[connection_name]["extra"])
         import sqlalchemy
  
         url, connect_args = _build_engine_url(connection_name)
@@ -204,6 +181,7 @@ def _execute_query(sql: str, params: list, connection_name: str, engine = None) 
     que o modelo consiga se autocorrigir ou o usuário entenda o problema
     sem stacktrace.
     """
+    require(DB_CONNECTIONS[connection_name]["extra"])
     import sqlalchemy
 
     try:

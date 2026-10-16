@@ -1,17 +1,19 @@
+# ruff: noqa: E402 -- o guard de dependência precisa rodar antes do pandas.
+
 import uuid
 from pathlib import Path
-import matplotlib
-matplotlib.use('Agg')  # necessario para salvar sem display
-import matplotlib.pyplot as plt
-import plotext as plx
+from .optional_deps import require
+
+require("data")
+
 import pandas as pd
 
 STAGING_DIR = Path('output') / 'plots_staging'
 
 ##TODO: scatter e pie ficam para depois — plotext lida bem nativamente com bar e line, o que cobre a maioria dos casos de groupby.
-VALID_CHART_TYPES = {"bar", "line"}
-
 def _render_terminal(agrupado: pd.Series, chart_type: str, title: str) -> None:
+    import plotext as plx
+
     labels = [str(x) for x in agrupado.index]
     values = list(agrupado.values)
 
@@ -24,6 +26,10 @@ def _render_terminal(agrupado: pd.Series, chart_type: str, title: str) -> None:
     plx.show()
 
 def _save_png(agrupado: pd.Series, chart_type: str, title: str, xlabel: str, ylabel: str) -> Path:
+    import matplotlib
+    matplotlib.use('Agg')  # evita abrir janela de plotagem
+    import matplotlib.pyplot as plt
+
     STAGING_DIR.mkdir(parents = True, exist_ok = True)
     filepath = STAGING_DIR / f"{uuid.uuid4().hex[:8]}.png"
 
@@ -52,5 +58,6 @@ def render_and_save(agrupado: pd.Series, chart_type: str, title: str, xlabel: st
     Assume chart_type já validado contra VALID_CHART_TYPES pelo chamador.
     Retorna o caminho do PNG salvo (ainda em staging, não definitivo).
     """
+    require("charts")
     _render_terminal(agrupado, chart_type, title)
     return _save_png(agrupado, chart_type, title, xlabel, ylabel)

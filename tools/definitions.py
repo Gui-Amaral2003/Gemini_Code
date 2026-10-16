@@ -1,7 +1,9 @@
-from .database import TABELAS_PERMITIDAS
-from .plotting import VALID_CHART_TYPES
-from .git_tool import GIT_ALLOWED_REPOS
-from .airflow_tool import AIRFLOW_ALLOWED_DAGS
+from .catalogs import (
+    AIRFLOW_ALLOWED_DAGS,
+    CHART_TYPES as VALID_CHART_TYPES,
+    GIT_ALLOWED_REPOS,
+    TABLES_ALLOWED as TABELAS_PERMITIDAS,
+)
 
 _TABELAS_EDITAVEIS = [t for t, cfg in TABELAS_PERMITIDAS.items() if cfg.get("colunas_editaveis")]
 _GIT_REPOS_EDITAVEIS = [nome for nome, cfg in GIT_ALLOWED_REPOS.items() if cfg.get("writable")]

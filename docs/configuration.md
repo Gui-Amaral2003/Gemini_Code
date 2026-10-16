@@ -7,10 +7,12 @@ Para uso normal, instale a aplicação isoladamente com `pipx`:
 ```powershell
 py -m pip install --user pipx
 py -m pipx ensurepath
-py -m pipx install git+https://github.com/Gui-Amaral2003/Gemini_Code.git
+py -m pipx install "gemini-code-terminal[all] @ git+https://github.com/Gui-Amaral2003/Gemini_Code.git"
 ```
 
 Depois de `ensurepath`, feche e reabra o terminal para que o Windows reconheça a alteração no `PATH`. Se o projeto tiver sido instalado com `pip`, `python -m gemini_terminal` pode ser usado como alternativa ao executável global.
+
+O extra `all` instala todas as integrações. Para uma instalação menor, omita-o ou escolha entre `data`, `charts`, `pdf`, `sqlserver`, `hive` e `airflow`. O diagnóstico `/config` informa quais recursos estão disponíveis sem tentar conexões externas.
 
 ## Assistente
 

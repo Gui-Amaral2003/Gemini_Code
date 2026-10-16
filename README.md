@@ -56,7 +56,13 @@ py -m pip install --user pipx
 py -m pipx ensurepath
 ```
 
-Feche e reabra o terminal. Em seguida, instale o Gemini Terminal diretamente do GitHub:
+Feche e reabra o terminal. Em seguida, instale o Gemini Terminal diretamente do GitHub. A instalação completa, recomendada para experimentar todas as tools, é:
+
+```powershell
+pipx install "gemini-code-terminal[all] @ git+https://github.com/Gui-Amaral2003/Gemini_Code.git"
+```
+
+Para instalar apenas o terminal, filesystem e Git, sem as integrações de dados:
 
 ```powershell
 pipx install git+https://github.com/Gui-Amaral2003/Gemini_Code.git
@@ -70,6 +76,8 @@ gemini-terminal
 ```
 
 O comando pode ser executado em qualquer diretório. Sessões, histórico, cache e logs ficam no diretório de dados da aplicação; arquivos produzidos pelas ferramentas continuam relativos ao diretório atual.
+
+Extras disponíveis: `data`, `charts`, `pdf`, `sqlserver`, `hive` e `airflow`. O comando `/config` mostra quais estão instalados e como adicionar os ausentes.
 
 ### Instalação para desenvolvimento
 

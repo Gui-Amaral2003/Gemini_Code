@@ -57,6 +57,8 @@ Persiste mensagens e o identificador da última interação. Se o contexto remot
 
 É a fonte de verdade para função, roteamento, confirmação, timeout e ciclo de vida de arquivos. Definições enviadas ao modelo e policies são verificadas por testes de consistência.
 
+As implementações são referenciadas por `LazyTool` e importadas apenas na primeira execução. Allowlists e metadados usados pelos schemas ficam em `tools/catalogs.py`, que não carrega bibliotecas opcionais. Assim, iniciar o terminal não exige pandas, drivers de banco, PDF, gráficos ou Airflow; quando um recurso ausente é solicitado, a tool retorna a instrução para instalar o extra correspondente.
+
 ## Roteamento de modelos
 
 Ferramentas exploratórias mantêm o modelo principal para decidir o próximo passo. Quando uma rodada contém somente ferramentas terminais, um modelo mais barato pode sintetizar a resposta. Se ele solicitar outra ferramenta, o fluxo retorna ao modelo principal.

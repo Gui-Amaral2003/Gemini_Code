@@ -33,12 +33,14 @@ DB_DIALECTS = {
 DB_CONNECTIONS = {
     "sqlserver_main": {
         "dialect": "mssql",
+        "extra": "sqlserver",
         "build": "conn_string",       # connection string pronta numa única env var
         "conn_string_env": "DB_CONN_STRING",
         "query_timeout_seconds": 10,  # aplicado via connect_args (pyodbc suporta)
     },
     "hive_lake": {
         "dialect": "hive",
+        "extra": "hive",
         "build": "url_components",    # monta a URL via componentes (evita problema de encoding de senha LDAP)
         "host_env": "HIVE_HOST",
         "port_env": "HIVE_PORT",

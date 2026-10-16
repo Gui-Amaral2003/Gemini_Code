@@ -1,5 +1,11 @@
+# ruff: noqa: E402 -- o guard de dependência precisa rodar antes do pandas.
+
 ##TODO: Implementar multiplos parametros no groupby, no momento apenas um parametro é aceito
 ##TODO: plot_* hoje só suporta chart_type em {"bar", "line"} — scatter/pie ficam para depois
+
+from .optional_deps import require
+
+require("data")
 
 import pandas as pd
 from .validation import (
@@ -8,7 +14,8 @@ from .validation import (
 )
 from .database import fetch_table_dataframe
 from .filesystem import resolve_file_path
-from .plotting import render_and_save, VALID_CHART_TYPES
+from .catalogs import CHART_TYPES as VALID_CHART_TYPES
+from .plotting import render_and_save
 
 _VALID_OPERATIONS = {'sum', 'mean', 'count', 'min', 'max', 'nunique', 'median', 'std'}
 SPREADSHEET_EXTENSIONS = {".xlsx", ".xls", ".csv"}
