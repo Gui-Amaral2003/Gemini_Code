@@ -47,7 +47,7 @@ def _text(value, location):
     return value
 
 
-def _identifier(value, location):
+def validate_sql_identifier(value, location):
     _text(value, location)
     if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
         raise CatalogError(f"{location}: identificador SQL inválido.")
@@ -80,22 +80,29 @@ def validate_catalog(data: dict) -> None:
         _text(dag.get("description"), where + ".description")
     for name, table in groups["database"].items():
         where = f"database.tables.{name}"
-        _identifier(name, where)
+        validate_sql_identifier(name, where)
         _mapping(table, where)
-        _keys(table, ("connection", "schema", "return_columns", "filter_columns", "editable_columns"), where)
+        _keys(table, ("connection", "schema", "return_columns", "filter_columns", "editable_columns", "column_types"), where)
         if not isinstance(table.get("connection"), str) or table["connection"] not in DB_CONNECTIONS:
             raise CatalogError(f"{where}.connection: conexão não cadastrada.")
-        _identifier(table.get("schema"), where + ".schema")
+        validate_sql_identifier(table.get("schema"), where + ".schema")
         columns = table.get("return_columns")
         if not isinstance(columns, list) or not columns or any(not isinstance(c, str) for c in columns):
             raise CatalogError(f"{where}.return_columns: informe uma lista não vazia de colunas.")
         for column in columns:
-            _identifier(column, where + ".return_columns")
-        for field in ("filter_columns", "editable_columns"):
+            validate_sql_identifier(column, where + ".return_columns")
+        if len(columns) != len(set(columns)):
+            raise CatalogError(f"{where}.return_columns: colunas duplicadas.")
+        for field in ("filter_columns", "editable_columns", "column_types"):
             for column, kind in _mapping(table.get(field, {}), where + "." + field).items():
-                _identifier(column, where + "." + field)
+                validate_sql_identifier(column, where + "." + field)
                 if kind not in ("int", "float", "str", "date"):
                     raise CatalogError(f"{where}.{field}.{column}: tipo inválido.")
+        for column, kind in table.get("column_types", {}).items():
+            for field in ("filter_columns", "editable_columns"):
+                declared = table.get(field, {}).get(column)
+                if declared is not None and declared != kind:
+                    raise CatalogError(f"{where}.{field}.{column}: tipo diverge de column_types.")
         if table.get("editable_columns") and DB_CONNECTIONS[table["connection"]]["dialect"] != "mssql":
             raise CatalogError(f"{where}: escrita disponível apenas para SQL Server.")
 

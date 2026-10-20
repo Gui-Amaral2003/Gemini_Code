@@ -474,7 +474,7 @@ def print_help() -> None:
     table.add_row("/help", "Mostra esta ajuda")
     table.add_row('/config', "Mostra o status da configuração do Gemini")
     table.add_row('/config edit', "Edita a configuração do Gemini")
-    table.add_row('/config resources', "Gerencia repositórios Git e DAGs do Airflow")
+    table.add_row('/config resources', "Gerencia Git, DAGs do Airflow e tabelas de banco")
     table.add_row("/history", "Mostra o histórico local")
     table.add_row("/sessions", "Abre o gerenciador de sessões")
     table.add_row("/new <nome>", "Cria e ativa uma nova sessão")

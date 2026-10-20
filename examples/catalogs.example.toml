@@ -1,5 +1,5 @@
 # Copie para o caminho exibido por /config. Ajuste os exemplos antes de usar.
-# O editor /config resources cadastra Git e Airflow sem editar este arquivo.
+# O editor /config resources cadastra Git, Airflow e tabelas sem editar este arquivo.
 # Git: descomente e informe um repositório existente.
 # [git.repositories.meu_projeto]
 # path = "C:/projetos/meu-projeto"
@@ -12,6 +12,12 @@ description = "Pipeline fictício de atualização diária"
 connection = "sqlserver_main"
 schema = "sales"
 return_columns = ["id", "status", "value"]
+
+# Metadados opcionais usados pelo editor, inclusive para colunas só de retorno.
+[database.tables.sample_deals.column_types]
+id = "int"
+status = "str"
+value = "float"
 
 [database.tables.sample_deals.filter_columns]
 id = "int"

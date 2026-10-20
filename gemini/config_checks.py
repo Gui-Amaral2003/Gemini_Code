@@ -262,7 +262,7 @@ def _check_catalog() -> list[ConfigCheck]:
     return [ConfigCheck(
         "Recursos locais", "Catálogo", CheckStatus.OK,
         f"{path}: " + ", ".join(counts) + ".",
-        "Use /config resources para Git/Airflow. Reinicie após salvar.",
+        "Use /config resources para Git, Airflow e tabelas. Reinicie após salvar.",
     )]
 
 

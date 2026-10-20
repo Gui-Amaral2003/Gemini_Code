@@ -1,6 +1,6 @@
-"""Editor local de Git/Airflow. Compartilha a validação com o loader TOML.
+"""Editor local de Git/Airflow/tabelas. Usa a validação do loader TOML.
 
-TODO: editor de tabelas/colunas e preview do diff do catálogo.
+TODO: preview do diff do catálogo.
 TODO: detectar edição concorrente do arquivo antes de salvar.
 """
 
@@ -12,6 +12,7 @@ from rich.prompt import Confirm, Prompt
 from rich.table import Table
 
 from tools.catalogs import CatalogError, catalog_path, load_catalog, save_catalog
+from .table_resource_wizard import edit_tables
 
 
 def _edit_resource(console, data, group, section):
@@ -55,21 +56,25 @@ def run_resources(console: Console | None = None, path: Path | None = None) -> N
     run = console or Console()
     target = path if path is not None else catalog_path()
     run.print(f"Recursos locais: {target}", markup=False)
-    run.print("0: voltar · 1: repositórios Git · 2: DAGs do Airflow")
+    run.print("0: voltar · 1: repositórios Git · 2: DAGs do Airflow · 3: tabelas de banco")
     try:
         # Um arquivo inválido nunca é substituído por um catálogo vazio.
         data = load_catalog(target)
         while True:
             repos = len(data.get("git", {}).get("repositories", {}))
             dags = len(data.get("airflow", {}).get("dags", {}))
-            run.print(f"Git: {repos} repositório(s) · Airflow: {dags} DAG(s)")
-            choice = Prompt.ask("Grupo", choices=["0", "1", "2"], default="0", console=run)
+            tables = len(data.get("database", {}).get("tables", {}))
+            run.print(f"Git: {repos} repositório(s) · Airflow: {dags} DAG(s) · Banco: {tables} tabela(s)")
+            choice = Prompt.ask("Grupo", choices=["0", "1", "2", "3"], default="0", console=run)
             if choice == "0":
                 return
             candidate = deepcopy(data)
             group, section = ("git", "repositories") if choice == "1" else ("airflow", "dags")
             try:
-                if _edit_resource(run, candidate, group, section):
+                changed = edit_tables(run, candidate) if choice == "3" else _edit_resource(
+                    run, candidate, group, section
+                )
+                if changed:
                     save_catalog(candidate, target)
                     data = candidate
                     run.print("Salvo. Reinicie o terminal para atualizar tools e permissões.")

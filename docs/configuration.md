@@ -24,7 +24,7 @@ Dentro do terminal:
 
 - `/config` executa diagnósticos locais sem revelar valores secretos;
 - `/config edit` reabre o assistente.
-- `/config resources` cadastra, edita e remove repositórios Git e DAGs do Airflow.
+- `/config resources` cadastra, edita e remove repositórios Git, DAGs do Airflow e tabelas de banco.
 
 ## Catálogo local de recursos
 
@@ -32,11 +32,17 @@ As allowlists de tabelas, repositórios e DAGs ficam em `catalogs.toml`, no dire
 
 O catálogo começa vazio. Os recursos anteriormente fixos no código precisam ser cadastrados novamente. Credenciais continuam no `.env`. Um arquivo inválido bloqueia o carregamento de todas as allowlists até ser corrigido e o terminal reiniciado.
 
-Execute `/config resources`, escolha `1` para Git ou `2` para Airflow e depois `adicionar`, `editar` ou `remover`. Use `0` para sair do menu de grupos. Para cancelar durante um formulário, pressione Ctrl+C. Cada alteração exige confirmação antes de salvar; habilitar escrita em Git exige digitar `PERMITIR ESCRITA`. O padrão é somente leitura. A gravação é atômica e preserva os outros grupos.
+Execute `/config resources`, escolha `1` para Git, `2` para Airflow ou `3` para tabelas de banco e depois `adicionar`, `editar` ou `remover`. Use `0` para sair do menu de grupos. Para cancelar durante um formulário, pressione Ctrl+C. Cada alteração exige confirmação antes de salvar; habilitar escrita em Git exige digitar `PERMITIR ESCRITA`. O padrão é somente leitura. A gravação é atômica e preserva os outros grupos.
 
 Reinicie o terminal depois de salvar: schemas e tools usam o mesmo catálogo carregado na inicialização.
 
-Tabelas são configuradas manualmente nesta V1; consulte [catalogs.example.toml](../examples/catalogs.example.toml). As conexões disponíveis são `sqlserver_main` e `hive_lake`; tipos de coluna aceitos: `int`, `float`, `str` e `date`. Sem `editable_columns`, a tabela permanece somente leitura. Escrita está disponível somente para SQL Server.
+Para tabelas, informe a conexão (`sqlserver_main` ou `hive_lake`), schema e nome real. Em `colunas`, use `adicionar`, `editar` ou `remover`; escolha `concluir` para retornar ao resumo. Cada coluna tem um tipo (`int`, `float`, `str` ou `date`) e permissões de retorno e filtro, ambas habilitadas por padrão no cadastro. Deve existir ao menos uma coluna de retorno. No resumo da tabela, use `dados` para alterar conexão/schema, `colunas` para ajustar permissões, `salvar` para validar e confirmar ou `cancelar` para descartar as alterações.
+
+O cadastro valida somente a configuração local. Não acessa o banco para descobrir colunas ou verificar a existência da tabela. Credenciais e variáveis de conexão são configuradas em `/config edit`. Remover um cadastro não remove a tabela do banco.
+
+Tabelas novas são somente leitura. O editor preserva `editable_columns` já existentes no TOML e mostra essas permissões no resumo. Alterar ou remover uma coluna editável exige confirmação específica; removê-la elimina suas permissões de retorno, filtro e escrita. Alterar o destino (conexão/schema) de uma tabela com escrita também exige confirmação. Não é permitido transferir uma tabela com escrita habilitada para Hive; a configuração deve permanecer somente leitura nesse dialeto. Novas permissões de escrita continuam sendo configuradas manualmente no arquivo.
+
+Também é possível editar o TOML diretamente; consulte [catalogs.example.toml](../examples/catalogs.example.toml). O campo opcional `column_types` registra os tipos informados no assistente, incluindo colunas usadas somente no retorno. Catálogos antigos continuam compatíveis; tipos ausentes de colunas somente de retorno aparecem como “não informado” até serem editadas. Os tipos em `column_types` devem coincidir com os declarados em `filter_columns` e `editable_columns`.
 
 O editor reescreve o TOML ao salvar, preservando dados, mas não comentários e formatação. Arquivos locais chamados `catalogs.toml` são ignorados pelo Git.
 
