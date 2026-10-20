@@ -230,4 +230,5 @@ quota_tracker.json
 prompt_history.txt
 
 output/
+catalogs.toml
 .vscode/

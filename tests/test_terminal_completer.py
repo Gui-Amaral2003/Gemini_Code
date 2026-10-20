@@ -66,7 +66,8 @@ def test_primeiro_prompt_grava_historico_em_diretorio_novo(monkeypatch, tmp_path
 
 
 def test_completa_subcomando_de_configuracao():
-    assert complete("/config ") == ["edit"]
+    assert complete("/config ") == ["edit", "resources"]
+    assert complete("/config r") == ["resources"]
     assert complete("/config e") == ["edit"]
     assert complete("/config edit") == ["edit"]
     assert complete("/config desconhecido") == []

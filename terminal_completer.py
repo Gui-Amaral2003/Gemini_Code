@@ -12,9 +12,11 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.styles import Style
 
 from tools.definitions import TOOL_DEFINITIONS
-from tools.database import TABELAS_PERMITIDAS
-from tools.airflow_tool import AIRFLOW_ALLOWED_DAGS
-from tools.git_tool import GIT_ALLOWED_REPOS
+from tools.catalogs import (
+    TABLES_ALLOWED as TABELAS_PERMITIDAS,
+    AIRFLOW_ALLOWED_DAGS,
+    GIT_ALLOWED_REPOS,
+)
 from tools.filesystem import ALLOWED_SEARCH_DIRS
 
 from gemini.config import DEFAULT_PROMPT_HISTORY_PATH, DEFAULT_SESSIONS_PATH
@@ -42,7 +44,7 @@ SLASH_COMMANDS = [
     "/help", "/config", "/history", "/sessions", "/new", "/switch", "/quote",
     "/clear", "/tools", "/think", "/logs", "/tokens", "/trace", "/exit",
 ]
-CONFIG_SUBCOMMANDS = ["edit"]
+CONFIG_SUBCOMMANDS = ["edit", "resources"]
 _TOOL_NAMES = [d["name"] for d in TOOL_DEFINITIONS]
 
 PROMPT_STYLE = Style.from_dict({"prompt": "bold fg:#00ffff"}) 

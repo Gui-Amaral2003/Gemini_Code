@@ -24,6 +24,21 @@ Dentro do terminal:
 
 - `/config` executa diagnósticos locais sem revelar valores secretos;
 - `/config edit` reabre o assistente.
+- `/config resources` cadastra, edita e remove repositórios Git e DAGs do Airflow.
+
+## Catálogo local de recursos
+
+As allowlists de tabelas, repositórios e DAGs ficam em `catalogs.toml`, no diretório de dados do aplicativo. Use `/config` para consultar o caminho, a validade e a quantidade de recursos. A variável opcional `GEMINI_CATALOG_PATH` seleciona outro arquivo; não há descoberta automática na pasta atual.
+
+O catálogo começa vazio. Os recursos anteriormente fixos no código precisam ser cadastrados novamente. Credenciais continuam no `.env`. Um arquivo inválido bloqueia o carregamento de todas as allowlists até ser corrigido e o terminal reiniciado.
+
+Execute `/config resources`, escolha `1` para Git ou `2` para Airflow e depois `adicionar`, `editar` ou `remover`. Use `0` para sair do menu de grupos. Para cancelar durante um formulário, pressione Ctrl+C. Cada alteração exige confirmação antes de salvar; habilitar escrita em Git exige digitar `PERMITIR ESCRITA`. O padrão é somente leitura. A gravação é atômica e preserva os outros grupos.
+
+Reinicie o terminal depois de salvar: schemas e tools usam o mesmo catálogo carregado na inicialização.
+
+Tabelas são configuradas manualmente nesta V1; consulte [catalogs.example.toml](../examples/catalogs.example.toml). As conexões disponíveis são `sqlserver_main` e `hive_lake`; tipos de coluna aceitos: `int`, `float`, `str` e `date`. Sem `editable_columns`, a tabela permanece somente leitura. Escrita está disponível somente para SQL Server.
+
+O editor reescreve o TOML ao salvar, preservando dados, mas não comentários e formatação. Arquivos locais chamados `catalogs.toml` são ignorados pelo Git.
 
 ## Variáveis
 
@@ -62,7 +77,7 @@ Para reutilizar sessões criadas por versões anteriores, aponte temporariamente
 
 ## Bancos de dados
 
-As conexões lógicas ficam em `tools/db_connections.py`. Cada tabela cadastrada em `TABELAS_PERMITIDAS`, em `tools/database.py`, aponta para uma conexão e declara:
+As conexões lógicas ficam em `tools/db_connections.py`. Cada tabela cadastrada em `database.tables` no catálogo local aponta para uma conexão e declara:
 
 - schema;
 - colunas retornáveis;
@@ -81,4 +96,4 @@ A URL é montada por componentes para preservar caracteres especiais de credenci
 
 ## Airflow
 
-A API v2 do Airflow 3.x usa autenticação por token. O token fica apenas em memória e é renovado quando necessário. Os DAGs consultáveis precisam ser cadastrados em `AIRFLOW_ALLOWED_DAGS`.
+A API v2 do Airflow 3.x usa autenticação por token. O token fica apenas em memória e é renovado quando necessário. Cadastre os DAGs consultáveis em `/config resources` ou na seção `airflow.dags` do catálogo local.

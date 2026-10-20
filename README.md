@@ -140,6 +140,7 @@ Veja o [roteiro completo da demonstração](docs/demo.md), incluindo como regene
 | `/help` | Exibe a ajuda completa |
 | `/config` | Diagnostica configuração, dependências e diretórios |
 | `/config edit` | Abre o assistente do `.env` |
+| `/config resources` | Gerencia repositórios Git e DAGs do Airflow |
 | `/sessions` | Abre o gerenciador de sessões |
 | `/new <nome>` / `/switch <nome>` | Cria ou troca a sessão ativa |
 | `/tools [nome]` | Lista ferramentas ou detalha uma delas |

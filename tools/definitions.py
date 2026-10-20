@@ -7,6 +7,22 @@ from .catalogs import (
 
 _TABELAS_EDITAVEIS = [t for t, cfg in TABELAS_PERMITIDAS.items() if cfg.get("colunas_editaveis")]
 _GIT_REPOS_EDITAVEIS = [nome for nome, cfg in GIT_ALLOWED_REPOS.items() if cfg.get("writable")]
+
+
+def _normalize_empty_enums(value):
+    """O SDK não aceita enums vazios; as tools continuam validando allowlists."""
+    if isinstance(value, dict):
+        if value.get("enum") == []:
+            del value["enum"]
+            value["description"] = value.get("description", "") + (
+                " Nenhum recurso cadastrado. Configure /config resources ou catalogs.toml."
+            )
+        for nested in value.values():
+            _normalize_empty_enums(nested)
+    elif isinstance(value, list):
+        for nested in value:
+            _normalize_empty_enums(nested)
+
 # Descrição das ferramentas que será enviada ao Gemini.
 TOOL_DEFINITIONS = [
     {
@@ -1076,3 +1092,5 @@ TOOL_DEFINITIONS = [
         },
     },
 ]
+
+_normalize_empty_enums(TOOL_DEFINITIONS)

@@ -35,6 +35,12 @@ def _validate_port(value: str) -> Optional[str]:
 
 
 ENV_SETTINGS: dict[str, EnvSetting] = {
+    "GEMINI_CATALOG_PATH": EnvSetting(
+        key="GEMINI_CATALOG_PATH",
+        label="Arquivo de recursos (catalogs.toml)",
+        group="Aplicativo",
+        description="Caminho opcional do catálogo local de tabelas, Git e Airflow.",
+    ),
     "GEMINI_DATA_DIR": EnvSetting(
         key="GEMINI_DATA_DIR",
         label="Diretório de dados",

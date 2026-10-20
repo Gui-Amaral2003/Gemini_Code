@@ -1,0 +1,23 @@
+# Copie para o caminho exibido por /config. Ajuste os exemplos antes de usar.
+# O editor /config resources cadastra Git e Airflow sem editar este arquivo.
+# Git: descomente e informe um repositório existente.
+# [git.repositories.meu_projeto]
+# path = "C:/projetos/meu-projeto"
+# writable = false
+
+[airflow.dags.ingestao_diaria]
+description = "Pipeline fictício de atualização diária"
+
+[database.tables.sample_deals]
+connection = "sqlserver_main"
+schema = "sales"
+return_columns = ["id", "status", "value"]
+
+[database.tables.sample_deals.filter_columns]
+id = "int"
+status = "str"
+value = "float"
+
+# Sem editable_columns, a tabela é somente leitura.
+# [database.tables.sample_deals.editable_columns]
+# status = "str"

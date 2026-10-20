@@ -240,6 +240,32 @@ def _check_output_directory(output_dir: Path = Path("output")) -> ConfigCheck:
     )
 
 
+def _check_catalog() -> list[ConfigCheck]:
+    from tools.catalogs import CatalogError, catalog_path, load_catalog
+
+    path = catalog_path()
+    try:
+        data = load_catalog(path)
+    except CatalogError as error:
+        return [ConfigCheck(
+            "Recursos locais", "Catálogo", CheckStatus.ERROR,
+            str(error), "Corrija o TOML e reinicie o terminal.",
+        )]
+    counts = [
+        f"{len(data.get(group, {}).get(section, {}))} {label}"
+        for group, section, label in (
+            ("git", "repositories", "repositório(s)"),
+            ("airflow", "dags", "DAG(s)"),
+            ("database", "tables", "tabela(s)"),
+        )
+    ]
+    return [ConfigCheck(
+        "Recursos locais", "Catálogo", CheckStatus.OK,
+        f"{path}: " + ", ".join(counts) + ".",
+        "Use /config resources para Git/Airflow. Reinicie após salvar.",
+    )]
+
+
 def run_local_checks(
     status: Optional[dict[str, str]] = None,
     dependency_finder: DependencyFinder = importlib.util.find_spec,
@@ -253,6 +279,7 @@ def run_local_checks(
         *_check_hive(current, dependency_finder),
         *_check_airflow(current, dependency_finder),
         *_check_optional_extras(dependency_finder),
+        *_check_catalog(),
         *_check_tools(),
         _check_output_directory(output_dir),
     ]

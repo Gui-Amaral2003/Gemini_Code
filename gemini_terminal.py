@@ -12,6 +12,7 @@ import logging
 import os
 from gemini import ActivityEvent, GeminiClient, ChatSession
 from gemini.config_wizard import run_wizard, show_status
+from gemini.resource_wizard import run_resources
 from gemini.session_ui import pick_session
 from tools.definitions import TOOL_DEFINITIONS
 from tools.confirmation import set_confirm_callback, set_confirm_typed_callback
@@ -213,6 +214,10 @@ def main(argv=None):
 
             if user_input == '/config edit':
                 run_wizard(console)
+                continue
+
+            if user_input == '/config resources':
+                run_resources(console)
                 continue
 
             if user_input == "/history":
@@ -469,6 +474,7 @@ def print_help() -> None:
     table.add_row("/help", "Mostra esta ajuda")
     table.add_row('/config', "Mostra o status da configuração do Gemini")
     table.add_row('/config edit', "Edita a configuração do Gemini")
+    table.add_row('/config resources', "Gerencia repositórios Git e DAGs do Airflow")
     table.add_row("/history", "Mostra o histórico local")
     table.add_row("/sessions", "Abre o gerenciador de sessões")
     table.add_row("/new <nome>", "Cria e ativa uma nova sessão")

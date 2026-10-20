@@ -4,11 +4,21 @@ from tools import database
 from tools.validation import QueryValidationError
 
 
-TABELA = "TEST_DOA_DEALS"
-SCHEMA = database.TABELAS_PERMITIDAS[TABELA]["schema"]
-COLUNAS_RETORNO = database.TABELAS_PERMITIDAS[TABELA]["colunas_retorno"]
+TABELA = "sample_deals"
+SCHEMA = "sales"
+COLUNAS_RETORNO = ["ID", "Company", "Supply_Start", "Term"]
 COLUNAS_SQL = ", ".join(f"[{c}]" for c in COLUNAS_RETORNO)
 SELECT_BASE = f"SELECT TOP {database.MAX_ROWS} {COLUNAS_SQL} FROM [{SCHEMA}].[{TABELA}]"
+
+
+@pytest.fixture(autouse=True)
+def sample_table(monkeypatch):
+    monkeypatch.setitem(database.TABELAS_PERMITIDAS, TABELA, {
+        "connection": "sqlserver_main",
+        "schema": SCHEMA,
+        "colunas_retorno": COLUNAS_RETORNO,
+        "colunas_filtro": {"ID": "int", "Company": "str", "Supply_Start": "date", "Term": "str"},
+    })
 
 
 # --------------------------------------------------------------------------- #
@@ -74,10 +84,10 @@ def test_build_query_multiplas_conditions_usa_and_e_indices_sequenciais():
 
 def test_build_query_operador_like_envolve_valor_em_percent():
     sql, params = database._build_query(
-        TABELA, [{"column": "WBC_TERM", "operator": "LIKE", "value": "abc"}]
+        TABELA, [{"column": "Term", "operator": "LIKE", "value": "abc"}]
     )
 
-    assert sql == SELECT_BASE + " WHERE [WBC_TERM] LIKE :param_0"
+    assert sql == SELECT_BASE + " WHERE [Term] LIKE :param_0"
     assert params == ["%abc%"]
 
 

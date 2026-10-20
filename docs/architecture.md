@@ -57,7 +57,7 @@ Persiste mensagens e o identificador da última interação. Se o contexto remot
 
 É a fonte de verdade para função, roteamento, confirmação, timeout e ciclo de vida de arquivos. Definições enviadas ao modelo e policies são verificadas por testes de consistência.
 
-As implementações são referenciadas por `LazyTool` e importadas apenas na primeira execução. Allowlists e metadados usados pelos schemas ficam em `tools/catalogs.py`, que não carrega bibliotecas opcionais. Assim, iniciar o terminal não exige pandas, drivers de banco, PDF, gráficos ou Airflow; quando um recurso ausente é solicitado, a tool retorna a instrução para instalar o extra correspondente.
+As implementações são referenciadas por `LazyTool` e importadas apenas na primeira execução. `tools/catalogs.py` valida e carrega o `catalogs.toml` local uma vez na inicialização, compartilhando o mesmo snapshot com schemas e tools sem carregar bibliotecas opcionais. Catálogos ausentes ou inválidos não liberam recursos. Após editar pelo `/config resources`, é necessário reiniciar o terminal. Assim, iniciar o terminal não exige pandas, drivers de banco, PDF, gráficos ou Airflow; quando um recurso ausente é solicitado, a tool retorna a instrução para instalar o extra correspondente.
 
 ## Roteamento de modelos
 
