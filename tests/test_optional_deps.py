@@ -24,6 +24,11 @@ def test_is_available_when_all_modules_exist():
     )
 
 
+def test_hive_detects_pure_sasl_by_its_importable_module_name():
+    modules = {"sqlalchemy", "pyhive", "thrift", "thrift_sasl", "puresasl"}
+    assert optional_deps.is_available("hive", fake_finder(modules))
+
+
 def test_unknown_extra_has_clear_error():
     with pytest.raises(ValueError, match="Extra desconhecido"):
         optional_deps.is_available("unknown", fake_finder())

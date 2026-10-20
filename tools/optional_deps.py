@@ -10,7 +10,7 @@ EXTRAS = {
     "data": [("pandas", "pandas"), ("openpyxl", "openpyxl")],
     "sqlserver": [("sqlalchemy", "sqlalchemy"), ("pyodbc", "pyodbc")],
     "hive": [("sqlalchemy", "sqlalchemy"), ("pyhive", "pyhive"), ("thrift", "thrift"),
-             ("thrift_sasl", "thrift-sasl"), ("pure_sasl", "pure-sasl")],
+             ("thrift_sasl", "thrift-sasl"), ("puresasl", "pure-sasl")],
     "charts": [("matplotlib", "matplotlib"), ("plotext", "plotext")],
     "pdf": [("pypdf", "pypdf")],
     "airflow": [("requests", "requests")],
