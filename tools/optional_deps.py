@@ -7,7 +7,7 @@ REPO = "git+https://github.com/Gui-Amaral2003/Gemini_Code.git"
 
 # extra -> [(módulo importável, nome no pip)]
 EXTRAS = {
-    "data": [("pandas", "pandas"), ("openpyxl", "openpyxl")],
+    "data": [("pandas", "pandas"), ("openpyxl", "openpyxl"), ("tabulate", "tabulate")],
     "sqlserver": [("sqlalchemy", "sqlalchemy"), ("pyodbc", "pyodbc")],
     "hive": [("sqlalchemy", "sqlalchemy"), ("pyhive", "pyhive"), ("thrift", "thrift"),
              ("thrift_sasl", "thrift-sasl"), ("puresasl", "pure-sasl")],
