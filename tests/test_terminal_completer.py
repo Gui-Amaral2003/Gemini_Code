@@ -31,9 +31,10 @@ def test_completa_comandos_parciais():
     assert complete("/sess") == ["/sessions"]
 
 
-def test_prompt_session_inclui_atalho_do_gerenciador(monkeypatch):
+def test_prompt_session_inclui_atalho_do_gerenciador(monkeypatch, tmp_path):
     sentinel = object()
     captured = {}
+    monkeypatch.setattr(terminal_completer, "HISTORY_PATH", tmp_path / "history.txt")
 
     monkeypatch.setattr(terminal_completer, "session_key_bindings", lambda: sentinel)
     monkeypatch.setattr(
@@ -45,6 +46,23 @@ def test_prompt_session_inclui_atalho_do_gerenciador(monkeypatch):
     terminal_completer.build_prompt_session()
 
     assert captured["key_bindings"] is sentinel
+
+
+def test_primeiro_prompt_grava_historico_em_diretorio_novo(monkeypatch, tmp_path):
+    history_path = tmp_path / "new" / "data" / "prompt_history.txt"
+    monkeypatch.setattr(terminal_completer, "HISTORY_PATH", history_path)
+    monkeypatch.setattr(terminal_completer, "PromptSession", lambda **kwargs: kwargs)
+    monkeypatch.setattr(terminal_completer, "build_completer", lambda: None)
+
+    session = terminal_completer.build_prompt_session()
+    session["history"].append_string("/config")
+
+    assert history_path.is_file()
+    assert "/config" in history_path.read_text(encoding="utf-8")
+
+    # Inicializações seguintes preservam o histórico existente.
+    terminal_completer.build_prompt_session()
+    assert "/config" in history_path.read_text(encoding="utf-8")
 
 
 def test_completa_subcomando_de_configuracao():

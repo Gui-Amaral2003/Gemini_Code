@@ -200,6 +200,8 @@ def build_completer() -> Completer:
     ])
 
 def build_prompt_session() -> PromptSession:
+    # FileHistory cria o arquivo, mas não cria os diretórios pais.
+    HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
     return PromptSession(
         history=FileHistory(HISTORY_PATH),
         completer=build_completer(),
