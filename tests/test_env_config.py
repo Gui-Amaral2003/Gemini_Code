@@ -7,6 +7,42 @@ def test_load_env_status_returns_empty_for_missing_file(tmp_path):
     assert env_config.load_env_status(tmp_path / ".env") == {}
 
 
+def test_save_default_env_creates_parent_and_reads_latest_values(monkeypatch, tmp_path):
+    path = tmp_path / "new" / "app" / ".env"
+    monkeypatch.setattr(env_config, "ENV_PATH", path)
+    monkeypatch.setattr(env_config, "SYSTEM_ENV", {})
+
+    env_config.update_env_value("GEMINI_API_KEY", "first")
+    assert env_config.load_env_status()["GEMINI_API_KEY"] == "first"
+    env_config.update_env_value("GEMINI_API_KEY", "second")
+    assert env_config.load_env_status()["GEMINI_API_KEY"] == "second"
+    assert path.is_file()
+
+
+def test_diagnostics_use_system_values_without_exposing_or_replacing_file(monkeypatch, tmp_path):
+    path = tmp_path / ".env"
+    env_config.update_env_value("GEMINI_API_KEY", "file-value", path)
+    monkeypatch.setattr(env_config, "ENV_PATH", path)
+    monkeypatch.setattr(env_config, "SYSTEM_ENV", {"GEMINI_API_KEY": "system-value"})
+
+    assert env_config.load_env_status()["GEMINI_API_KEY"] == "system-value"
+    assert env_config.load_env_status(path)["GEMINI_API_KEY"] == "file-value"
+    env_config.update_env_value("GEMINI_API_KEY", "edited-file-value")
+    assert env_config.load_env_status()["GEMINI_API_KEY"] == "system-value"
+    assert env_config.load_env_status(path)["GEMINI_API_KEY"] == "edited-file-value"
+
+
+def test_delete_default_env_keeps_other_quoted_settings(monkeypatch, tmp_path):
+    path = tmp_path / ".env"
+    monkeypatch.setattr(env_config, "ENV_PATH", path)
+    env_config.update_env_value("GEMINI_API_KEY", "secret")
+    env_config.update_env_value("HIVE_PASSWORD", 'quoted "password"')
+
+    env_config.delete_env_value("GEMINI_API_KEY")
+
+    assert dotenv_values(path) == {"HIVE_PASSWORD": 'quoted "password"'}
+
+
 def test_update_env_value_creates_file_and_preserves_existing_content(tmp_path):
     env_path = tmp_path / ".env"
     env_path.write_text("# comentário\nEXISTING=value\n", encoding="utf-8")

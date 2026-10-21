@@ -48,6 +48,19 @@ O editor reescreve o TOML ao salvar, preservando dados, mas não comentários e 
 
 ## Variáveis
 
+O assistente, o diagnóstico e a inicialização usam o mesmo arquivo global. No Windows, o padrão é `%LOCALAPPDATA%\GuiAmaral\GeminiTerminal\.env`; em outros sistemas, fica no diretório de dados padrão do aplicativo. Execute `/config` para consultar o caminho efetivo.
+
+A ordem de prioridade é: variáveis já definidas no ambiente do processo, depois o arquivo global. Um `.env` da pasta atual ou do repositório não é descoberto automaticamente. O assistente informa quando uma variável do ambiente tem prioridade sobre o valor salvo.
+
+Para escolher outro arquivo, defina `GEMINI_ENV_PATH` **no ambiente antes de iniciar**. Por exemplo, para usar explicitamente o `.env` de um clone durante desenvolvimento:
+
+```powershell
+$env:GEMINI_ENV_PATH = (Resolve-Path .env).Path
+gemini-terminal
+```
+
+Use um caminho absoluto. `GEMINI_ENV_PATH` é uma opção de inicialização: colocá-la dentro do próprio arquivo não muda a localização dele. Reinicie o terminal após alterar a configuração.
+
 ```env
 GEMINI_API_KEY=sua_chave
 
@@ -69,6 +82,12 @@ AIRFLOW_PASSWORD=sua_senha
 
 O `.env` não deve ser versionado.
 
+### Migração de configurações antigas
+
+Arquivos `.env` de versões anteriores não são copiados ou apagados automaticamente. Execute `gemini-terminal --config` para cadastrar os valores no arquivo global, ou revise e copie manualmente as configurações antigas para o caminho indicado pelo assistente. Preserve eventuais valores já existentes no destino. Outra opção é definir `GEMINI_ENV_PATH` para apontar explicitamente para o arquivo antigo.
+
+As antigas allowlists fixas no código também não são migradas: cadastre tabelas, DAGs e repositórios em `/config resources`. Para sessões e logs antigos, veja a seção seguinte.
+
 ## Diretório de dados
 
 Sessões, cache, quota, histórico do prompt, traces e logs de auditoria ficam no diretório de dados da aplicação definido pelo sistema operacional. Para escolher outro local:
@@ -76,6 +95,8 @@ Sessões, cache, quota, histórico do prompt, traces e logs de auditoria ficam n
 ```env
 GEMINI_DATA_DIR=C:\caminho\para\gemini-data
 ```
+
+Salve essa variável no arquivo global pelo `/config edit` ou defina-a no ambiente. Ela muda os dados e o catálogo padrão, mas **não move o `.env`**. Essa localização estável permite carregar a configuração no próximo início sem depender do diretório de trabalho.
 
 Essa separação permite executar `gemini-terminal` de qualquer diretório sem gravar estado dentro do pacote instalado. A pasta `output/` continua relativa ao diretório atual, pois contém resultados solicitados pelo usuário.
 

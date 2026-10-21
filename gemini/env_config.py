@@ -12,9 +12,9 @@ tools/confirmation.py (callback de pergunta) vs tools/*.py (regra).
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Optional
-from dotenv import dotenv_values, set_key
+from dotenv import dotenv_values, set_key, unset_key
+from app_environment import ENV_PATH, SYSTEM_ENV
 
-ENV_PATH = Path(".env")
 
 @dataclass(frozen=True)
 class EnvSetting:
@@ -85,45 +85,45 @@ def groups() -> dict[str, list[EnvSetting]]:
     return {name: settings for name, settings in grouped.items() if settings}
 
 
-def load_env_status(path: Path = ENV_PATH) -> dict[str, str]:
+def load_env_status(path: Optional[Path] = None) -> dict[str, str]:
     """
-    Lê o .env em disco. Nunca lança se o arquivo não existir — este
-    módulo também é usado antes de o .env existir (primeiro --config).
+    Sem path explícito, lê o arquivo global com os overrides do ambiente.
+    Um path explícito consulta só o arquivo, útil para edição/migração.
+    Arquivo inexistente é aceito no primeiro --config.
     """
-    if not path.exists():
-        return {}
-    return {key: (value or "") for key, value in dotenv_values(path).items()}
+    target = path if path is not None else ENV_PATH
+    values = {
+        key: (value or "") for key, value in dotenv_values(target).items()
+    } if target.exists() else {}
+    if path is None:
+        values.update({key: SYSTEM_ENV[key] for key in ENV_SETTINGS if key in SYSTEM_ENV})
+    return values
 
 
-def is_configured(key: str, status: Optional[dict[str, str]] = None, path: Path = ENV_PATH) -> bool:
+def is_configured(key: str, status: Optional[dict[str, str]] = None, path: Optional[Path] = None) -> bool:
     status = status if status is not None else load_env_status(path)
     return bool(status.get(key))
 
 
-def update_env_value(key: str, value: str, path: Path = ENV_PATH) -> None:
+def update_env_value(key: str, value: str, path: Optional[Path] = None) -> None:
     """Grava/atualiza uma variável no .env, preservando o restante do arquivo."""
-    path.touch(exist_ok=True)
-    set_key(dotenv_path=str(path), key_to_set=key, value_to_set=value, quote_mode="always")
+    target = path if path is not None else ENV_PATH
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.touch(exist_ok=True)
+    set_key(dotenv_path=str(target), key_to_set=key, value_to_set=value, quote_mode="always")
 
 
-def delete_env_value(key: str, path: Path = ENV_PATH) -> None:
+def delete_env_value(key: str, path: Optional[Path] = None) -> None:
     """
-    Remove uma variável do .env. Reescreve o arquivo (mantendo as demais
-    entradas na mesma ordem) em vez de confiar em um "unset" da lib —
-    setar valor vazio deixaria a chave presente, comportamento diferente
-    de "não configurado".
+    Remove uma variável do arquivo preservando outras entradas e comentários.
+    Não altera variáveis herdadas do ambiente do processo.
     """
-    if not path.exists():
+    target = path if path is not None else ENV_PATH
+    if not target.exists():
         return
-
-    current = dotenv_values(path)
-    if key not in current:
-        return
-
-    lines = [f'{k}="{v or ""}"' for k, v in current.items() if k != key]
-    path.write_text("\n".join(lines) + ("\n" if lines else ""), encoding="utf-8")
+    unset_key(str(target), key)
 
 
-def missing_required(path: Path = ENV_PATH) -> list[EnvSetting]:
+def missing_required(path: Optional[Path] = None) -> list[EnvSetting]:
     status = load_env_status(path)
     return [s for s in ENV_SETTINGS.values() if s.required and not is_configured(s.key, status)]

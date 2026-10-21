@@ -1,26 +1,11 @@
 
-import os
 import ssl
 from pathlib import Path
 
 from google.genai import errors as genai_errors
-from dotenv import load_dotenv
-from platformdirs import user_data_dir
-
-load_dotenv()
+from app_environment import resolve_data_dir as _resolve_data_dir
 
 PACKAGE_DIR = Path(__file__).resolve().parent
-APP_NAME = "GeminiTerminal"
-APP_AUTHOR = "GuiAmaral"
-
-
-def _resolve_data_dir() -> Path:
-    configured = os.environ.get("GEMINI_DATA_DIR")
-    if configured:
-        return Path(configured).expanduser().resolve()
-    return Path(user_data_dir(APP_NAME, APP_AUTHOR))
-
-
 DATA_DIR = _resolve_data_dir()
 
 RETRYABLE_ERRORS = (

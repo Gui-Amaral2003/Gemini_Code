@@ -10,6 +10,7 @@ from rich.prompt import Prompt
 from rich.table import Table
 from rich.text import Text
 from rich import box
+from app_environment import SYSTEM_ENV
 
 from .env_config import (
     ENV_PATH,
@@ -41,6 +42,8 @@ def _status_table(console: Console, checks: Optional[list[ConfigCheck]] = None) 
     table = Table(box=box.SIMPLE, show_header=False, padding=(0, 2), expand=True)
     table.add_column(style="bold", ratio=1)
     table.add_column(ratio=3)
+    table.add_row("Arquivo", Text(str(ENV_PATH), style=STYLE_SYSTEM, overflow="fold"))
+    table.add_row("", "")
 
     first = True
     group_names = list(dict.fromkeys(check.group for check in checks))
@@ -65,7 +68,7 @@ def _status_table(console: Console, checks: Optional[list[ConfigCheck]] = None) 
         Panel(
             table,
             title="Configuração",
-            subtitle=f"[dim]{ENV_PATH} · {summary}[/dim]",
+            subtitle=Text(summary, style=STYLE_SYSTEM),
             border_style=STYLE_ACCENT,
             box=box.ROUNDED,
         )
@@ -109,6 +112,11 @@ def _edit_setting(console: Console, setting, status: dict[str, str]) -> None:
 
         update_env_value(setting.key, new_value)
         console.print(Panel(f"{setting.label} salvo.", style=STYLE_OK, box=box.ROUNDED))
+        if setting.key in SYSTEM_ENV:
+            console.print(
+                f"{setting.key} também está definida no ambiente e tem prioridade sobre o arquivo.",
+                style=STYLE_WARNING,
+            )
         return
 
 

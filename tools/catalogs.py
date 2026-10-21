@@ -7,8 +7,7 @@ import tempfile
 import tomllib
 from pathlib import Path
 
-from dotenv import load_dotenv
-from platformdirs import user_data_dir
+from app_environment import resolve_data_dir
 
 from .db_connections import DB_CONNECTIONS
 
@@ -18,15 +17,10 @@ class CatalogError(ValueError):
 
 
 def catalog_path() -> Path:
-    load_dotenv()
     configured = os.environ.get("GEMINI_CATALOG_PATH")
     if configured:
         return Path(configured).expanduser().resolve()
-    data_dir = os.environ.get("GEMINI_DATA_DIR")
-    base = Path(data_dir).expanduser() if data_dir else Path(
-        user_data_dir("GeminiTerminal", "GuiAmaral")
-    )
-    return (base / "catalogs.toml").resolve()
+    return resolve_data_dir() / "catalogs.toml"
 
 
 def _mapping(value, location):

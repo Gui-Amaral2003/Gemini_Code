@@ -107,7 +107,7 @@ Repository = "https://github.com/Gui-Amaral2003/Gemini_Code"
 Issues = "https://github.com/Gui-Amaral2003/Gemini_Code/issues"
 
 [tool.setuptools]
-py-modules = ["gemini_terminal", "terminal_completer", "terminal_timeline"]
+py-modules = ["app_environment", "gemini_terminal", "terminal_completer", "terminal_timeline"]
 
 [tool.setuptools.packages.find]
 include = ["gemini*", "tools*"]

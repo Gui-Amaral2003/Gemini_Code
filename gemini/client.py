@@ -34,13 +34,6 @@ from .activity import ActivityRecorder
 from .model_gateway import ModelGateway, ModelRequest
 from .tool_executor import ToolExecutor, ToolExecutionContext
 
-try:
-    from dotenv import load_dotenv
-
-    load_dotenv()
-except ImportError:
-    pass
-
 logger = logging.getLogger("gemini_client")
 if not logger.handlers:
     handler = logging.StreamHandler()
