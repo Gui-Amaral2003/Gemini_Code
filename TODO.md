@@ -1,250 +1,107 @@
-## TODO:
+# Roadmap e pendências
+
+A versão 0.1.0 alpha já foi publicada. Este arquivo reúne entregas existentes,
+trabalho pendente e ideias futuras; não representa uma sequência obrigatória de
+implementação. O histórico de versões fica no [CHANGELOG](CHANGELOG.md).
 
-# ============================================================
-# ROADMAP — GEMINI DATA AGENT
-# ============================================================
+## Entregue na 0.1.0
 
-# ------------------------------------------------------------
-# FASE 1 — ORGANIZAÇÃO E QUALIDADE DO PROJETO
-# ------------------------------------------------------------
+- [x] Registry central de ferramentas com `ToolPolicy`, validação de consistência e carregamento lazy.
+- [x] Separação de gateway de modelos, executor de ferramentas, atividade e sessões.
+- [x] Limite de rodadas de function calling para controlar loops do modelo.
+- [x] Timeout de chamadas ao modelo e de espera por ferramentas, com exceção das que aguardam confirmação humana.
+- [x] Confirmação de operações sensíveis e auditoria de escrita.
+- [x] Planilhas CSV/Excel, consultas e análises em banco, PDFs e gráficos de barras/linhas.
+- [x] Trace, timeline, consumo de tokens e estimativa local de quota.
+- [x] Sessões persistentes, histórico e autocomplete no terminal.
+- [x] Configuração global por `.env`, com prioridade das variáveis do ambiente.
+- [x] `/config` para diagnóstico local e `/config edit` para configuração assistida.
+- [x] Catálogos TOML locais e `/config resources` para Git, Airflow e tabelas.
+- [x] Processos reutilizáveis carregados de YAML/JSON pela API Python.
+- [x] Empacotamento, comando `gemini-terminal` e extras de instalação.
+- [x] CI com Ruff, pytest em Python 3.11/3.12 e smoke test do wheel.
+- [x] Documentação de arquitetura, configuração, segurança e limitações.
+- [x] Demonstração reproduzível com CSV fictício e imagem SVG no README.
 
-## TODO: Criar um sistema central de registro de ferramentas
-# Substituir o dicionário TOOLS por um mecanismo de registro.
-# Exemplo conceitual:
-# register_tool(name, function, description)
+Testes, segurança e observabilidade continuam sendo atividades de manutenção;
+essas áreas não são consideradas encerradas.
 
-## TODO: Criar modelos estruturados para resultados das ferramentas
-# Criar ToolResult com:
-# - success
-# - data
-# - error_type
-# - message
-# - metadata
+## Organização e qualidade
 
-# ------------------------------------------------------------
-# FASE 2 — TESTES
-# ------------------------------------------------------------
-# FINALIZADO NO MOMENTO
+- [ ] Dividir as responsabilidades de `gemini_terminal.py`: loop, comandos, renderização e callbacks.
+- [ ] Separar os schemas de `tools/definitions.py` por categoria, preservando a interface pública.
+- [ ] Padronizar resultados de ferramentas com campos como sucesso, dados, erro e metadados.
+- [ ] Extrair a responsabilidade de agente de `GeminiClient`, com um ciclo de interação explícito.
+- [ ] Organizar a navegação local para distinguir código, resultados e artefatos regeneráveis.
 
-# ------------------------------------------------------------
-# FASE 3 — EXCEL / DATA ANALYSIS
-# ------------------------------------------------------------
-# FINALIZADO
+## Testes e distribuição
 
-# ------------------------------------------------------------
-# FASE 4 — VISUALIZAÇÃO
-# ------------------------------------------------------------
+- [ ] Criar avaliações comportamentais: escolha de ferramentas, respeito às restrições e confirmação de escrita.
+- [ ] Ampliar testes de instalações mínimas e de extras isolados, incluindo execução real de ferramentas.
+- [ ] Automatizar build e anexação de artefatos em futuras releases.
+- [ ] Manter testes de regressão para problemas encontrados em uso real.
 
-## TODO: Suportar scatter plot
+## Dados e ferramentas
 
-## TODO: Suportar histograma
+### Planilhas e análise
 
-## TODO: Suportar boxplot
+- [ ] Suportar agrupamento por múltiplas colunas.
+- [ ] Suportar múltiplas métricas e agregações na mesma execução.
+- [ ] Adicionar scatter, histograma e boxplot; avaliar pie conforme os casos de uso.
 
-# ------------------------------------------------------------
-# FASE 5 — TOOL ORCHESTRATION
-# ------------------------------------------------------------
+### Documentos
 
-## TODO: Adicionar limite máximo de chamadas por interação
-# Evitar loops infinitos do modelo.
+- [ ] Extrair tabelas de PDFs.
+- [ ] Suportar PDFs escaneados com OCR.
+- [ ] Avaliar suporte a DOCX.
 
-## TODO: Adicionar timeout por ferramenta
+### Banco, Git e Airflow
 
-# ------------------------------------------------------------
-# FASE 6 — SEGURANÇA
-# ------------------------------------------------------------
+- [ ] Separar credenciais de leitura e escrita em banco, com privilégios mínimos.
+- [ ] Avaliar INSERT como operação própria, com validação e confirmação adequadas.
+- [ ] Avaliar execução, pausa e retomada de DAGs com allowlist de escrita e confirmação.
+- [ ] Avaliar commit de alterações aprovadas pelo usuário e integração com PRs/issues do GitHub.
 
-## TODO: Criar limite de tamanho dos arquivos
+Essas operações de escrita exigem revisão das políticas antes de serem
+habilitadas; a existência do TODO não implica liberação automática.
 
-## TODO: Criar limite de tempo de execução das ferramentas
+## Configuração
 
-# ------------------------------------------------------------
-# FASE 7 — OBSERVABILIDADE
-# ------------------------------------------------------------
-# FINALIZADO
+- [ ] Recarregar configuração e catálogos de forma explícita e consistente, sem reiniciar.
+- [ ] Tornar modelos principal, barato e fallback configuráveis pelo usuário.
+- [ ] Tornar limites operacionais configuráveis: linhas, retries e timeouts.
+- [ ] Permitir gerenciar permissões de escrita de tabelas pelo assistente, com confirmação específica.
+- [ ] Detectar edições concorrentes e apresentar diff antes de salvar catálogos.
+- [ ] Avaliar perfis separados para desenvolvimento e produção.
+- [ ] Adicionar teste explícito de conexão e descoberta de colunas de banco.
+- [ ] Adicionar `/config test` com confirmação antes de acessar Gemini, SQL Server, Hive ou Airflow. O teste de Gemini deve informar o consumo de uma chamada.
+- [ ] Exportar diagnóstico sanitizado, sem segredos, hosts internos, headers, connection strings, prompts ou caminhos pessoais.
+- [ ] Avaliar reparos assistidos somente para ações locais, explícitas e reversíveis.
 
-# ------------------------------------------------------------
-# FASE 8 — CONFIGURAÇÃO
-# ------------------------------------------------------------
+O YAML de processos contém instruções reutilizáveis para o modelo; ele não
+substitui o `.env` de credenciais nem o TOML de recursos e permissões.
 
-## TODO: Centralizar configurações do projeto
+## Segurança e limites
 
-## TODO: Permitir configuração por .env
+- [ ] Definir limites de tamanho para arquivos antes da leitura.
+- [ ] Priorizar timeouts nativos para operações remotas e revisar cancelamento de execução.
+- [ ] Avaliar isolamento de scripts em container ou sandbox de sistema operacional.
+- [ ] Revisar periodicamente arquivos versionados e exemplos para evitar exposição de dados privados.
 
-## TODO: Permitir configuração por YAML
+O timeout do executor limita a espera; ele não encerra uma função Python que
+já começou. Ferramentas que aguardam confirmação humana não usam esse wrapper.
 
-## TODO: Separar configurações de desenvolvimento e produção
+## Documentação e exemplos
 
-## TODO: Adicionar `/config test` para verificações externas
-# Pedir confirmação antes de testar Gemini, SQL Server, Hive e Airflow.
-# O teste do Gemini consome uma chamada e deve deixar esse custo explícito.
+- [ ] Revisar a origem do Excel demonstrativo e preparar um exemplo 100% fictício quando necessário.
+- [ ] Criar exemplos Python de conversa, consulta de banco, análise de planilha, gráficos e orquestração.
+- [ ] Adicionar uma demonstração animada com dados fictícios, se complementar o SVG existente.
+- [ ] Manter README, catálogos de exemplo e instruções de instalação alinhados ao código.
 
-## TODO: Exportar diagnóstico sanitizado do `/config`
-# Nunca incluir secrets, hosts internos, headers HTTP, connection strings,
-# prompts ou caminhos pessoais no relatório.
+## Ideias futuras — sem compromisso de versão
 
-## TODO: Avaliar reparos assistidos de configuração
-# Limitar a ações locais, explícitas e reversíveis. Nunca alterar
-# credenciais, conexões externas ou permissões automaticamente.
+- [ ] RAG: loaders de documentos, chunking, embeddings, armazenamento vetorial e busca semântica.
+- [ ] Interface web: upload de dados/documentos, conversa, ferramentas executadas, gráficos, tokens e trace.
 
-## TODO: Tornar modelos fallback configuráveis
-# Não deixar a lista de modelos hardcoded.
-
-## TODO: Tornar limites das ferramentas configuráveis
-# max_rows
-# timeout
-# max_retries
-# etc.
-
-# ------------------------------------------------------------
-# FASE 9 — DATASET DEMONSTRATIVO
-# ------------------------------------------------------------
-
-## TODO: Criar dataset Excel 100% fictício para demonstração
-
-## TODO: Criar exemplos reproduzíveis no README
-
-## TODO: Garantir que nenhum dado corporativo ou sensível
-# esteja presente no repositório.
-
-# ------------------------------------------------------------
-# FASE 10 — EXEMPLOS
-# ------------------------------------------------------------
-
-## TODO: Criar examples/basic_chat.py
-
-## TODO: Criar examples/database_query.py
-
-## TODO: Criar examples/excel_analysis.py
-
-## TODO: Criar examples/chart_generation.py
-
-## TODO: Criar examples/tool_orchestration.py
-
-# ------------------------------------------------------------
-# FASE 11 — DOCUMENTAÇÃO
-# ------------------------------------------------------------
-
-## TODO: Adicionar seção de segurança
-
-## TODO: Adicionar seção de limitações
-
-## TODO: Adicionar roadmap
-
-## TODO: Adicionar screenshots do terminal utilizando apenas dados fictícios
-
-## TODO: Adicionar GIF demonstrando uma interação completa
-# Pergunta
-# -> Gemini
-# -> Tool
-# -> Resultado
-# -> Gemini
-# -> Resposta
-
-# ------------------------------------------------------------
-# FASE 12 — CI/CD
-# ------------------------------------------------------------
-
-## TODO: Criar GitHub Actions para executar testes automaticamente
-
-## TODO: Executar pytest a cada push
-
-## TODO: Executar pytest a cada Pull Request
-
-## TODO: Testar múltiplas versões do Python
-
-## TODO: Adicionar lint ao pipeline
-
-## TODO: Adicionar validação de imports
-
-## TODO: Adicionar badge de build/testes no README
-
-# ------------------------------------------------------------
-# FASE 13 — ARQUITETURA DE AGENTE
-# ------------------------------------------------------------
-
-## TODO: Criar conceito explícito de Gemini Data Agent
-
-## TODO: Separar GeminiClient de Agent
-
-# GeminiClient:
-# Responsável pela comunicação com a API.
-#
-# Agent:
-# Responsável por:
-# - decidir ferramentas
-# - executar ferramentas
-# - controlar contexto
-# - controlar limites
-# - montar resposta final
-
-## TODO: Criar classe DataAgent
-
-## TODO: Definir ciclo de vida de uma interação
-
-# ------------------------------------------------------------
-# FASE 14 — RAG / DOCUMENTOS
-# ------------------------------------------------------------
-
-## TODO: Adicionar suporte a DOCX
-
-## TODO: Criar document loader
-
-## TODO: Criar chunking de documentos
-
-## TODO: Implementar embeddings
-
-## TODO: Implementar armazenamento vetorial
-
-## TODO: Criar ferramenta de busca semântica
-
-## TODO: Implementar RAG
-
-# ------------------------------------------------------------
-# FASE 15 — INTERFACE WEB
-# ------------------------------------------------------------
-
-## TODO: Criar interface web para o Data Agent
-
-## TODO: Permitir upload de Excel/CSV
-
-## TODO: Permitir upload de documentos
-
-## TODO: Exibir histórico da conversa
-
-## TODO: Exibir ferramentas executadas
-
-## TODO: Exibir gráficos gerados
-
-## TODO: Exibir consumo de tokens
-
-## TODO: Exibir execution trace
-
-# ------------------------------------------------------------
-# VISÃO FINAL DO PROJETO
-# ------------------------------------------------------------
-
-## TODO: Transformar o projeto em um Data/AI Agent completo
-
-# Objetivo final:
-#
-# Usuário
-#   ↓
-# Gemini Data Agent
-#   ↓
-# ┌───────────────┬────────────────┬────────────────┐
-# │               │                │                │
-# SQL Server    Excel/CSV       Documents        Files
-# │               │                │                │
-# └───────────────┴────────────────┴────────────────┘
-#                       ↓
-#                 Data Analysis
-#                       ↓
-#                 Visualization
-#                       ↓
-#                    Gemini
-#                       ↓
-#                   Response
-#
-# O usuário deve conseguir fazer perguntas em linguagem natural
-# e o agente deve decidir autonomamente quais ferramentas utilizar.
+Essas frentes ficam depois da consolidação do terminal e da validação de
+necessidades reais dos usuários.

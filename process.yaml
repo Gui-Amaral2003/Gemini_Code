@@ -1,8 +1,21 @@
-# Catálogo de processos reutilizáveis pelo gemini_client.py
-# Carregue com: from gemini_client import load_processes
-#               load_processes("processes.yaml")
+# Exemplos de processos reutilizáveis pela API Python de gemini.
+# A partir da raiz do clone, registre os processos explicitamente:
+#   from gemini import GeminiClient, load_processes, run_process
+#   load_processes("process.yaml")
 #
-# Adicione um processo novo aqui sem precisar tocar no código.
+# Para executar um deles (faz uma chamada à API):
+#   with GeminiClient() as client:
+#       resposta = run_process(client, "resumo_pt", "Texto para resumir.")
+#       print(resposta.text)
+#
+# load_processes() sem argumento procura "processes.yaml"; este exemplo usa
+# "process.yaml", por isso informe o caminho. Fora do clone, use o caminho
+# absoluto do arquivo. O arquivo não é instalado pelo pipx nem carregado
+# automaticamente pela CLI interativa.
+#
+# Cada processo tem uma instrução system e um modelo opcional. model: null
+# usa a seleção padrão do client. Adicione novos processos neste mapeamento;
+# credenciais ficam no .env global e permissões de tools no catalogs.toml.
  
 log_triage:
   system: >
