@@ -60,13 +60,13 @@ py -m pipx ensurepath
 Feche e reabra o terminal. Em seguida, instale o Gemini Terminal diretamente do GitHub. A instalação completa, recomendada para experimentar todas as tools, é:
 
 ```powershell
-pipx install "gemini-code-terminal[all] @ git+https://github.com/Gui-Amaral2003/Gemini_Code.git"
+pipx install "gemini-code-terminal[all] @ git+https://github.com/Gui-Amaral2003/Gemini_Code.git@v0.1.0"
 ```
 
 Para instalar apenas o terminal, filesystem e Git, sem as integrações de dados:
 
 ```powershell
-pipx install git+https://github.com/Gui-Amaral2003/Gemini_Code.git
+pipx install git+https://github.com/Gui-Amaral2003/Gemini_Code.git@v0.1.0
 ```
 
 Configure a chave e inicie a aplicação:
@@ -119,7 +119,7 @@ Para diagnosticar a instalação, use `Get-Command gemini-terminal` no PowerShel
 O dataset de demonstração não acompanha a instalação via `pipx`. Baixe-o na pasta onde iniciará o terminal:
 
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Gui-Amaral2003/Gemini_Code/main/examples/SampleSuperstore.csv" -OutFile SampleSuperstore.csv
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Gui-Amaral2003/Gemini_Code/v0.1.0/examples/SampleSuperstore.csv" -OutFile SampleSuperstore.csv
 gemini-terminal
 ```
 
@@ -207,14 +207,13 @@ A workflow testa automaticamente Python 3.11 e 3.12 em cada push e pull request.
 - [Configuração de Gemini, bancos e Airflow](docs/configuration.md)
 - [Segurança e limitações](docs/security.md)
 - [Changelog](CHANGELOG.md)
-- [Notas da versão 0.1.0 (em preparação)](docs/releases/v0.1.0.md)
+- [Notas da versão 0.1.0 alpha](docs/releases/v0.1.0.md)
 
 ## Roadmap
 
-1. concluir a validação externa e publicar a release `v0.1.0` alpha;
-2. avaliações comportamentais do agente;
-3. recarregamento explícito de configuração e catálogos;
-4. separação explícita entre cliente de API e `DataAgent`.
+1. avaliações comportamentais do agente;
+2. recarregamento explícito de configuração e catálogos;
+3. separação explícita entre cliente de API e `DataAgent`.
 
 Novas integrações, RAG e interface web ficam depois da consolidação dessa base.
 

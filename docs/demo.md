@@ -7,7 +7,7 @@ A demonstração usa exclusivamente `examples/SampleSuperstore.csv`, um dataset 
 Com o projeto já instalado com o extra `data` ou `all`, conforme o [Quick start](../README.md#quick-start), baixe o exemplo para a pasta atual. O CSV e os scripts de demonstração não são instalados pelo `pipx`:
 
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Gui-Amaral2003/Gemini_Code/main/examples/SampleSuperstore.csv" -OutFile SampleSuperstore.csv
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Gui-Amaral2003/Gemini_Code/v0.1.0/examples/SampleSuperstore.csv" -OutFile SampleSuperstore.csv
 gemini-terminal --config
 gemini-terminal
 ```
