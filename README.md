@@ -42,6 +42,7 @@ Um agente que acessa arquivos, bancos e scripts precisa de mais do que uma chama
 ### Requisitos
 
 - Python 3.11 ou 3.12;
+- Git, para instalação diretamente do repositório e uso das ferramentas Git;
 - uma chave da [Google Gemini API](https://ai.google.dev/);
 - banco e Airflow apenas se essas integrações forem utilizadas.
 
@@ -76,6 +77,8 @@ gemini-terminal
 ```
 
 O comando pode ser executado em qualquer diretório. Sessões, histórico, cache e logs ficam no diretório de dados da aplicação; arquivos produzidos pelas ferramentas continuam relativos ao diretório atual.
+
+O assistente salva a configuração em um `.env` global. No Windows, o padrão é `%LOCALAPPDATA%\GuiAmaral\GeminiTerminal\.env`. A aplicação não procura `.env` automaticamente na pasta atual nem no clone. Variáveis do ambiente têm prioridade; veja [configuração e migração](docs/configuration.md).
 
 Extras disponíveis: `data`, `charts`, `pdf`, `sqlserver`, `hive` e `airflow`. O comando `/config` mostra quais estão instalados e como adicionar os ausentes.
 
@@ -113,10 +116,17 @@ Para diagnosticar a instalação, use `Get-Command gemini-terminal` no PowerShel
 
 ## Demonstração reproduzível
 
-Depois de iniciar o terminal, use o dataset fictício versionado no projeto:
+O dataset de demonstração não acompanha a instalação via `pipx`. Baixe-o na pasta onde iniciará o terminal:
+
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Gui-Amaral2003/Gemini_Code/main/examples/SampleSuperstore.csv" -OutFile SampleSuperstore.csv
+gemini-terminal
+```
+
+Depois envie:
 
 ```text
-No arquivo examples/SampleSuperstore.csv, calcule o Profit total por Region.
+No arquivo SampleSuperstore.csv, calcule o Profit total por Region.
 Use analyze_sheet_data e apresente o resultado em ordem decrescente.
 ```
 
@@ -196,13 +206,15 @@ A workflow testa automaticamente Python 3.11 e 3.12 em cada push e pull request.
 - [Catálogo de ferramentas](docs/tools.md)
 - [Configuração de Gemini, bancos e Airflow](docs/configuration.md)
 - [Segurança e limitações](docs/security.md)
+- [Changelog](CHANGELOG.md)
+- [Notas da versão 0.1.0 (em preparação)](docs/releases/v0.1.0.md)
 
 ## Roadmap
 
-1. dependências opcionais e carregamento lazy das integrações;
+1. concluir a validação externa e publicar a release `v0.1.0` alpha;
 2. avaliações comportamentais do agente;
-3. separação explícita entre cliente de API e `DataAgent`;
-4. release `v0.1.0`.
+3. recarregamento explícito de configuração e catálogos;
+4. separação explícita entre cliente de API e `DataAgent`.
 
 Novas integrações, RAG e interface web ficam depois da consolidação dessa base.
 

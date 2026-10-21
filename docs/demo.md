@@ -4,9 +4,10 @@ A demonstração usa exclusivamente `examples/SampleSuperstore.csv`, um dataset 
 
 ## Execução completa com Gemini
 
-Com o projeto já instalado conforme o [Quick start](../README.md#quick-start):
+Com o projeto já instalado com o extra `data` ou `all`, conforme o [Quick start](../README.md#quick-start), baixe o exemplo para a pasta atual. O CSV e os scripts de demonstração não são instalados pelo `pipx`:
 
-```bash
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/Gui-Amaral2003/Gemini_Code/main/examples/SampleSuperstore.csv" -OutFile SampleSuperstore.csv
 gemini-terminal --config
 gemini-terminal
 ```
@@ -14,7 +15,7 @@ gemini-terminal
 Opcionalmente, habilite a timeline persistente com `/trace on` e envie:
 
 ```text
-No arquivo examples/SampleSuperstore.csv, calcule o Profit total por Region.
+No arquivo SampleSuperstore.csv, calcule o Profit total por Region.
 Use analyze_sheet_data e apresente o resultado em ordem decrescente.
 ```
 
@@ -30,6 +31,8 @@ Como a seleção e a redação dependem do modelo, textos e tokens podem variar.
 ## Regenerando a imagem do README
 
 O SVG é determinístico e não chama a API. O script executa diretamente a mesma função usada pela tool e renderiza o resultado com Rich:
+
+Esta etapa requer um clone do repositório e as dependências de desenvolvimento instaladas; execute a partir da raiz do clone.
 
 ```bash
 python scripts/generate_demo_svg.py
